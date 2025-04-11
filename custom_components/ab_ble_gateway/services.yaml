@@ -9,3 +9,16 @@ clean_failed_entries:
       default: false
       selector:
         boolean: {}
+
+reconnect:
+  name: Reconnect Gateway
+  description: Safely reconnect the AB BLE Gateway without restarting Home Assistant
+  fields:
+    entity_id:
+      name: Entity ID
+      description: The ID of the specific gateway to reconnect. Leave empty to reconnect all gateways.
+      required: false
+      selector:
+        entity:
+          domain: sensor
+          integration: ab_ble_gateway

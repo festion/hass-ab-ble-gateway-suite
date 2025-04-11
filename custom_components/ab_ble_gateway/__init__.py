@@ -2,6 +2,9 @@
 from __future__ import annotations
 import os
 import datetime
+import logging
+import logging.handlers
+from pathlib import Path
 from homeassistant.components.bluetooth import BaseHaRemoteScanner
 from .util import parse_ap_ble_devices_data, parse_raw_data
 from homeassistant.helpers.dispatcher import (
@@ -9,7 +12,6 @@ from homeassistant.helpers.dispatcher import (
     async_dispatcher_send,
 )
 
-import logging
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
@@ -20,7 +22,16 @@ from homeassistant.components import mqtt
 from homeassistant.components.bluetooth.const import DOMAIN as BLUETOOTH_DOMAIN
 from homeassistant.components.mqtt.models import ReceiveMessage
 from homeassistant.setup import async_when_setup
-from .const import DOMAIN, SERVICE_CLEAN_FAILED_ENTRIES, ATTR_DRY_RUN
+from .const import (
+    DOMAIN, 
+    SERVICE_CLEAN_FAILED_ENTRIES, 
+    SERVICE_RECONNECT,
+    ATTR_DRY_RUN,
+    LOGGER_NAME,
+    LOG_FILE,
+    LOG_FORMAT,
+    DEFAULT_LOG_LEVEL
+)
 from homeassistant.components.bluetooth import (
     HaBluetoothConnector,
     async_get_advertisement_callback,
@@ -48,7 +59,37 @@ TWO_CHAR = re.compile("..")
 # No platform entities for this integration - it just registers BLE scanners
 PLATFORMS: list[Platform] = []
 
-_LOGGER = logging.getLogger(__name__)
+# Set up custom logging
+_LOGGER = logging.getLogger(LOGGER_NAME)
+
+def setup_custom_logger(hass: HomeAssistant) -> None:
+    """Set up a custom logger for the AB BLE Gateway integration."""
+    try:
+        # Create logs directory if it doesn't exist
+        log_dir = Path(hass.config.path("logs"))
+        log_dir.mkdir(exist_ok=True)
+        
+        log_file = log_dir / LOG_FILE
+        
+        # Configure the file handler
+        file_handler = logging.handlers.RotatingFileHandler(
+            log_file, 
+            maxBytes=10*1024*1024,  # 10MB max file size
+            backupCount=5,  # Keep 5 backup copies
+        )
+        
+        # Set log format
+        formatter = logging.Formatter(LOG_FORMAT)
+        file_handler.setFormatter(formatter)
+        
+        # Configure the logger
+        logger = logging.getLogger(LOGGER_NAME)
+        logger.setLevel(getattr(logging, DEFAULT_LOG_LEVEL))
+        logger.addHandler(file_handler)
+        
+        logger.info(f"AB BLE Gateway logger initialized, logging to {log_file}")
+    except Exception as err:
+        _LOGGER.error(f"Failed to setup custom logger: {err}")
 
 
 class AbBleScanner(BaseHaRemoteScanner):
@@ -230,11 +271,120 @@ async def async_clean_failed_entries(hass, dry_run=False):
     )
 
 
+async def async_reconnect_gateway(hass: HomeAssistant, entry_id=None):
+    """Service call to safely reconnect the BLE Gateway."""
+    _LOGGER.info("Reconnect service called")
+    
+    try:
+        # If no specific entry ID is provided, try to reconnect all gateways
+        if entry_id is None:
+            for entry_id, entry_data in hass.data[DOMAIN].items():
+                if "scanner" in entry_data:
+                    await _reconnect_single_gateway(hass, entry_id)
+        else:
+            # Reconnect only the specified entry
+            if entry_id in hass.data[DOMAIN]:
+                await _reconnect_single_gateway(hass, entry_id)
+            else:
+                _LOGGER.warning(f"Cannot reconnect: Entry ID {entry_id} not found")
+                
+        return True
+    except Exception as e:
+        _LOGGER.error(f"Error during gateway reconnection: {e}")
+        return False
+
+
+async def _reconnect_single_gateway(hass: HomeAssistant, entry_id):
+    """Safely reconnect a single gateway by entry_id."""
+    
+    entry_data = hass.data[DOMAIN][entry_id]
+    
+    if "scanner" not in entry_data or "hass" not in entry_data:
+        _LOGGER.warning(f"Cannot reconnect {entry_id}: Missing scanner or hass reference")
+        return
+    
+    _LOGGER.info(f"Reconnecting gateway {entry_id}")
+    
+    scanner = entry_data["scanner"]
+    
+    try:
+        # Get the entry to access its data
+        config_entries = hass.config_entries
+        entry = next((e for e in config_entries.async_entries(DOMAIN) if e.entry_id == entry_id), None)
+        
+        if not entry:
+            _LOGGER.error(f"Cannot find configuration entry for {entry_id}")
+            return
+            
+        config = entry.as_dict()
+        mqtt_topic = config.get('data', {}).get('mqtt_topic')
+        
+        if not mqtt_topic:
+            _LOGGER.error(f"Missing mqtt_topic for {entry_id}")
+            return
+            
+        # Update gateway sensor to show reconnection in progress
+        attributes = {
+            "friendly_name": "BLE Gateway",
+            "icon": "mdi:bluetooth-connect",
+            "devices": [],
+            "gateway_id": "AprilBrother-Gateway4",
+            "gateway_status": "Reconnecting",
+            "last_scan": datetime.datetime.now().isoformat()
+        }
+        
+        # Set status to reconnecting
+        hass.states.async_set(
+            "sensor.ble_gateway_raw_data", 
+            "reconnecting", 
+            attributes
+        )
+        
+        # Attempt to resubscribe to MQTT topic
+        _LOGGER.info(f"Resubscribing to MQTT topic {mqtt_topic}")
+        await mqtt.async_subscribe(hass, mqtt_topic, scanner.async_on_mqtt_message, encoding=None)
+        
+        # Update gateway sensor to show connected again
+        attributes["gateway_status"] = "Connected"
+        attributes["last_scan"] = datetime.datetime.now().isoformat()
+        
+        hass.states.async_set(
+            "sensor.ble_gateway_raw_data", 
+            "online", 
+            attributes
+        )
+        
+        _LOGGER.info(f"Successfully reconnected gateway {entry_id}")
+        
+    except Exception as err:
+        _LOGGER.error(f"Error during reconnection of {entry_id}: {err}")
+        
+        # Update sensor to show error
+        attributes = {
+            "friendly_name": "BLE Gateway",
+            "icon": "mdi:bluetooth-off",
+            "devices": [],
+            "gateway_id": "AprilBrother-Gateway4", 
+            "gateway_status": f"Error: {str(err)}",
+            "last_scan": datetime.datetime.now().isoformat()
+        }
+        
+        hass.states.async_set(
+            "sensor.ble_gateway_raw_data", 
+            "error", 
+            attributes
+        )
+
+
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Set up the AB BLE Gateway component."""
     hass.data.setdefault(DOMAIN, {})
     
-    # Register the service
+    # Set up the custom logger
+    setup_custom_logger(hass)
+    _LOGGER.info("AB BLE Gateway integration starting setup")
+    
+    # Register services
     async_register_admin_service(
         hass,
         DOMAIN,
@@ -245,6 +395,18 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         }),
     )
     
+    # Register reconnect service
+    async_register_admin_service(
+        hass,
+        DOMAIN,
+        SERVICE_RECONNECT,
+        async_reconnect_gateway,
+        schema=vol.Schema({
+            vol.Optional(ATTR_ENTITY_ID): cv.string,
+        }),
+    )
+    
+    _LOGGER.info("AB BLE Gateway integration setup complete with dedicated logging")
     return True
 
 
