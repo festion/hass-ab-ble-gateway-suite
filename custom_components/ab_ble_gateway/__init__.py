@@ -97,13 +97,31 @@ class AbBleScanner(BaseHaRemoteScanner):
             # Counter to track successful device processing
             processed_count = 0
             
-            # Try to unpack normally, but catch the exact error we expect
+            # Log receipt of message (debug level to avoid spamming logs)
+            _LOGGER.debug(f"Received MQTT message with payload length: {len(msg.payload) if msg.payload else 0}")
+            
+            # ULTRA-DEFENSIVE APPROACH: We're going to handle each step with extensive error checking
+            
+            # Try to unpack very carefully with multiple layers of protection
+            unpacked_data = None
+            devices = None
+            
+            # First try to unpack the message
             try:
                 # Use msgpack directly but be ready to handle the extra data error
                 unpacked_data = msgpack.unpackb(msg.payload, raw=True)
+                
+                # Immediately check and sanitize the data structure
+                if not isinstance(unpacked_data, dict):
+                    _LOGGER.warning(f"Unpacked data is not a dictionary: {type(unpacked_data)}")
+                    # Convert to empty dict as a fallback
+                    unpacked_data = {}
+                    
             except Exception as unpack_err:
                 # Log the error for diagnostic purposes
                 _LOGGER.info(f"Msgpack unpacking error: {unpack_err}")
+                # Initialize with empty dict
+                unpacked_data = {}
                 
                 # Try a workaround for the extra data issue by treating it as two parts
                 if "extra data" in str(unpack_err):
@@ -113,101 +131,155 @@ class AbBleScanner(BaseHaRemoteScanner):
                         unpacker.feed(msg.payload)
                         unpacked_data = next(unpacker)
                         _LOGGER.info("Successfully extracted partial data from msgpack payload")
+                        
+                        # Verify it's a dictionary
+                        if not isinstance(unpacked_data, dict):
+                            _LOGGER.warning(f"Extracted data is not a dictionary: {type(unpacked_data)}")
+                            unpacked_data = {}
                     except Exception as workaround_err:
-                        _LOGGER.error(f"Failed to extract data with workaround: {workaround_err}")
-                        return
-                else:
-                    # Different error - just return
-                    return
-                
-            # Check for devices key
-            if b'devices' not in unpacked_data:
-                _LOGGER.warning("No 'devices' field in MQTT payload")
-                return
-                
-            # Process device data
-            devices = unpacked_data[b'devices']
+                        _LOGGER.warning(f"Failed to extract data with workaround: {workaround_err}")
+                        # Keep the empty dict initialization
             
-            # Make sure we have devices and that they're in the expected format
+            # Now safely try to get the devices field
+            try:
+                # Check for devices key
+                if b'devices' not in unpacked_data:
+                    _LOGGER.debug("No 'devices' field in MQTT payload")
+                    # Initialize with empty list
+                    devices = []
+                else:
+                    # Process device data with safety checks
+                    devices_raw = unpacked_data[b'devices']
+                    
+                    # Ensure devices is a list
+                    if not isinstance(devices_raw, list):
+                        _LOGGER.warning(f"Devices data is not a list: {type(devices_raw)}")
+                        # Force conversion to list if possible
+                        if isinstance(devices_raw, int):
+                            _LOGGER.warning("Received an integer instead of a list of devices, using empty list")
+                            devices = []
+                        elif devices_raw is None:
+                            devices = []
+                        else:
+                            # Try to create a list with the single item
+                            try:
+                                devices = [devices_raw]
+                                _LOGGER.info(f"Converted non-list device data to single-item list")
+                            except Exception:
+                                devices = []
+                    else:
+                        # It's already a list, we're good
+                        devices = devices_raw
+            except Exception as devices_err:
+                _LOGGER.warning(f"Error extracting devices data: {devices_err}")
+                # Ensure we have a list
+                devices = []
+            
+            # Ensure devices is always a list at this point
+            if not isinstance(devices, list):
+                _LOGGER.warning(f"Devices variable is still not a list: {type(devices)}")
+                devices = []
+                
+            # Skip processing if no devices
             if not devices:
-                _LOGGER.info("No devices in payload")
+                _LOGGER.debug("No devices to process")
                 return
                 
-            # Handle edge case where devices might not be a list
-            if not isinstance(devices, (list, tuple)):
-                _LOGGER.warning(f"Devices data is not a list or tuple: {type(devices)}")
-                if isinstance(devices, int):
-                    _LOGGER.warning("Received an integer instead of a list of devices, skipping processing")
-                    return
-                
-            # We aren't going to try to update the sensor here as we don't have direct access to Home Assistant
-            # The sensor should already be set up with the correct gateway info by async_setup_entry
-            # This is just a placeholder for future expansion if needed
+            # Log the number of devices found
             _LOGGER.info(f"Processing BLE gateway data with {len(devices)} devices")
             
-            # For debugging: log the devices we received
-            try:
-                # Make sure devices is iterable
-                if isinstance(devices, list):
-                    device_macs = [d[1] if isinstance(d, list) and len(d) > 1 else str(d) for d in devices]
-                    _LOGGER.info(f"Received data for devices: {device_macs[:5]}")
-                    if len(device_macs) > 5:
-                        _LOGGER.info(f"...and {len(device_macs) - 5} more devices")
-                else:
-                    _LOGGER.warning(f"Devices data is not a list: {type(devices)}")
-            except Exception as e:
-                _LOGGER.debug(f"Error logging device info: {e}")
-                
-            # Process each device, but first make sure devices is iterable
-            if not isinstance(devices, list):
-                _LOGGER.warning(f"Cannot process devices: expected list but got {type(devices)}")
-                return
-                
+            # Process each device with extreme defensive coding
             for d in devices:
                 try:
+                    # Skip invalid entries
+                    if not d:
+                        _LOGGER.debug("Skipping empty device entry")
+                        continue
+                        
                     # Check that we have a valid device entry
-                    if not isinstance(d, (list, tuple)) or len(d) < 2:
-                        _LOGGER.debug(f"Skipping invalid device entry: {d}")
+                    if not isinstance(d, (list, tuple)):
+                        _LOGGER.debug(f"Skipping non-list device entry: {d}")
                         continue
                         
-                    raw_data = parse_ap_ble_devices_data(d)
-                    adv = parse_raw_data(raw_data)
-                    
-                    # Skip invalid data
-                    if adv is None:
-                        _LOGGER.debug("Invalid advertisement data")
+                    if len(d) < 2:
+                        _LOGGER.debug(f"Skipping too-short device entry: {d}")
                         continue
                         
-                    # Basic validation
-                    if not all(k in adv for k in ['address', 'rssi', 'local_name', 'service_uuids', 'service_data', 'manufacturer_data']):
-                        _LOGGER.debug(f"Missing required fields in advertisement: {list(adv.keys())}")
-                        continue
-    
-                    # FINAL FIX: Completely separate approach to avoid the problematic parameters altogether
+                    # Parse the raw data with error handling
                     try:
-                        # Convert any integer device data to lists to avoid the "int is not iterable" error
-                        if isinstance(devices, int):
-                            _LOGGER.warning("Converted integer devices data to empty list")
-                            devices = []
-                            
-                        # Directly call _async_on_advertisement with the required parameters
-                        # Explicitly use empty containers for any potentially problematic parameters
-                        _LOGGER.debug("Using ultra-minimal parameter set for advertisement")
+                        raw_data = parse_ap_ble_devices_data(d)
+                        if raw_data is None:
+                            _LOGGER.debug(f"Could not parse device data: {d}")
+                            continue
+                    except Exception as parse_err:
+                        _LOGGER.debug(f"Error parsing device data: {parse_err}")
+                        continue
                         
-                        # Ensure all parameters have safe default values
-                        address = adv.get('address', '00:00:00:00:00:00').upper()
-                        rssi = adv.get('rssi', -100)
-                        local_name = adv.get('local_name', '')
-                        service_uuids = adv.get('service_uuids', [])
-                        service_data = adv.get('service_data', {})
-                        manufacturer_data = adv.get('manufacturer_data', {})
+                    # Parse the advertisement with error handling
+                    try:
+                        adv = parse_raw_data(raw_data)
+                        if adv is None:
+                            _LOGGER.debug("Invalid advertisement data")
+                            continue
+                    except Exception as adv_err:
+                        _LOGGER.debug(f"Error parsing advertisement: {adv_err}")
+                        continue
+                    
+                    # Ensure advertisement has all required fields with extremely safe defaults
+                    address = adv.get('address', '00:00:00:00:00:00')
+                    if address:  # Ensure it's not empty
+                        address = address.upper()
+                    else:
+                        address = '00:00:00:00:00:00'
                         
-                        # Ensure service_uuids is always a list
-                        if not isinstance(service_uuids, list):
-                            service_uuids = []
-                            
-                        # Make direct call to _async_on_advertisement with minimal parameters
-                        # Note: We completely avoid using advertisement_monotonic_time parameter
+                    # Get other parameters with safe defaults
+                    rssi = -100
+                    try:
+                        rssi_val = adv.get('rssi')
+                        if rssi_val is not None and isinstance(rssi_val, (int, float)):
+                            rssi = int(rssi_val)  # Ensure it's an integer
+                    except Exception:
+                        pass  # Keep default
+                    
+                    # Get string values with safe defaults
+                    local_name = ''
+                    try:
+                        local_name_val = adv.get('local_name')
+                        if local_name_val is not None and isinstance(local_name_val, str):
+                            local_name = local_name_val
+                    except Exception:
+                        pass  # Keep default
+                    
+                    # Ensure service_uuids is a list
+                    service_uuids = []
+                    try:
+                        service_uuids_val = adv.get('service_uuids')
+                        if service_uuids_val is not None and isinstance(service_uuids_val, list):
+                            service_uuids = service_uuids_val
+                    except Exception:
+                        pass  # Keep default
+                    
+                    # Ensure service_data is a dict
+                    service_data = {}
+                    try:
+                        service_data_val = adv.get('service_data')
+                        if service_data_val is not None and isinstance(service_data_val, dict):
+                            service_data = service_data_val
+                    except Exception:
+                        pass  # Keep default
+                    
+                    # Ensure manufacturer_data is a dict
+                    manufacturer_data = {}
+                    try:
+                        manufacturer_data_val = adv.get('manufacturer_data')
+                        if manufacturer_data_val is not None and isinstance(manufacturer_data_val, dict):
+                            manufacturer_data = manufacturer_data_val
+                    except Exception:
+                        pass  # Keep default
+                    
+                    # Ultra-defensive direct call to _async_on_advertisement with minimal parameters in try-except
+                    try:
+                        _LOGGER.debug(f"Calling _async_on_advertisement for device {address}")
                         self._async_on_advertisement(
                             address=address,
                             rssi=rssi,
@@ -219,23 +291,27 @@ class AbBleScanner(BaseHaRemoteScanner):
                         )
                         # Success - increment processed count
                         processed_count += 1
-                    except Exception as err:
-                        _LOGGER.error(f"Failed to process advertisement: {err}")
-                        # Continue to next device regardless
+                        _LOGGER.debug(f"Successfully processed advertisement for {address}")
+                    except Exception as adv_call_err:
+                        _LOGGER.error(f"Failed to process advertisement call: {adv_call_err}")
+                        # Continue to next device
                         
                 except Exception as device_err:
                     # Log but continue processing other devices
-                    _LOGGER.error(f"Error processing device data: {device_err}")
+                    _LOGGER.error(f"Error in device processing loop: {device_err}")
                     continue
             
             # Log the results
             if processed_count > 0:
                 _LOGGER.info(f"Successfully processed {processed_count} devices")
+            else:
+                _LOGGER.info("No devices were successfully processed")
                     
-        except Exception as err:
-            # Log any other errors
-            _LOGGER.error(f"Error in MQTT message handler: {err}")
+        except Exception as outer_err:
+            # Log any other errors at the outer level
+            _LOGGER.error(f"Outer error in MQTT message handler: {outer_err}")
             
+        # Always return to avoid any potential exceptions bubbling up
         return
 
 
