@@ -4,6 +4,7 @@ import os
 import datetime
 import logging
 import logging.handlers
+import asyncio
 from pathlib import Path
 from homeassistant.components.bluetooth import BaseHaRemoteScanner
 from .util import parse_ap_ble_devices_data, parse_raw_data
@@ -534,12 +535,90 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         }),
     )
     
-    # Register reconnect service
+    # Define a safe wrapper for the reconnect service
+    async def safe_reconnect_service_wrapper(call):
+        """Safely wrap the reconnect service to prevent HA restarts."""
+        try:
+            entity_id = call.data.get("entity_id", None)
+            _LOGGER.debug(f"Safe reconnect wrapper called with entity_id: {entity_id}")
+            
+            # Add a small delay to ensure the UI has time to update
+            await asyncio.sleep(0.5)
+            
+            # Create a persistent notification to show progress
+            try:
+                await hass.services.async_call(
+                    "persistent_notification", 
+                    "create", 
+                    {
+                        "title": "BLE Gateway Reconnect",
+                        "message": "Attempting to reconnect the BLE Gateway...",
+                        "notification_id": "ble_gateway_reconnect"
+                    }
+                )
+            except Exception as notif_err:
+                _LOGGER.error(f"Failed to create notification: {notif_err}")
+                
+            # Run the actual reconnect function with extra error handling
+            try:
+                result = await async_reconnect_gateway(hass, entity_id)
+                _LOGGER.info(f"Reconnect operation completed with result: {result}")
+                
+                # Update notification
+                try:
+                    if result:
+                        await hass.services.async_call(
+                            "persistent_notification", 
+                            "create", 
+                            {
+                                "title": "BLE Gateway Reconnect",
+                                "message": "Successfully reconnected the BLE Gateway.",
+                                "notification_id": "ble_gateway_reconnect"
+                            }
+                        )
+                    else:
+                        await hass.services.async_call(
+                            "persistent_notification", 
+                            "create", 
+                            {
+                                "title": "BLE Gateway Reconnect",
+                                "message": "Failed to reconnect the BLE Gateway. Check logs for details.",
+                                "notification_id": "ble_gateway_reconnect"
+                            }
+                        )
+                except Exception as notif_err:
+                    _LOGGER.error(f"Failed to update notification: {notif_err}")
+                    
+                return result
+            except Exception as err:
+                _LOGGER.error(f"Critical error in reconnect service: {err}")
+                
+                # Update notification for error
+                try:
+                    await hass.services.async_call(
+                        "persistent_notification", 
+                        "create", 
+                        {
+                            "title": "BLE Gateway Reconnect Error",
+                            "message": f"Error reconnecting BLE Gateway: {str(err)}",
+                            "notification_id": "ble_gateway_reconnect"
+                        }
+                    )
+                except Exception as notif_err:
+                    _LOGGER.error(f"Failed to create error notification: {notif_err}")
+                
+                # Don't re-raise the exception to prevent HA restart
+                return False
+        except Exception as outer_err:
+            _LOGGER.error(f"Outer exception in reconnect wrapper: {outer_err}")
+            return False
+    
+    # Register reconnect service with the safe wrapper
     async_register_admin_service(
         hass,
         DOMAIN,
         SERVICE_RECONNECT,
-        async_reconnect_gateway,
+        safe_reconnect_service_wrapper,
         schema=vol.Schema({
             vol.Optional("entity_id"): cv.string,
         }),

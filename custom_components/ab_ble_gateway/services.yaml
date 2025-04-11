@@ -12,12 +12,19 @@ clean_failed_entries:
 
 reconnect:
   name: Reconnect Gateway
-  description: Safely reconnect the AB BLE Gateway without restarting Home Assistant
+  description: >
+    Safely reconnect the BLE Gateway MQTT subscription.
+    This service will attempt to resubscribe to the MQTT topics used by the gateway
+    without requiring a Home Assistant restart.
   fields:
     entity_id:
-      name: Entity ID
-      description: The ID of the specific gateway to reconnect. Leave empty to reconnect all gateways.
+      name: Entity ID 
+      description: >
+        The entity ID of the gateway to reconnect.
+        Leave empty to reconnect all gateways.
+        Most installations will only have one gateway.
       required: false
       example: "sensor.ble_gateway_raw_data"
+      default: ""
       selector:
         text:
