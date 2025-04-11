@@ -38,7 +38,7 @@ def parse_raw_data(data: bytearray):
     try:
         adpayload_size = data[adpayload_start - 1]
     except IndexError:
-        return None, None
+        return None
     # check for BTLE msg size
     msg_length = data[2] + 3
     if (
@@ -46,7 +46,7 @@ def parse_raw_data(data: bytearray):
             adpayload_start + adpayload_size + (0 if is_ext_packet else 1)
         )
     ):
-        return None, None
+        return None
     # extract RSSI byte
     rssi_index = 18 if is_ext_packet else msg_length - 1
     rssi = data[rssi_index]

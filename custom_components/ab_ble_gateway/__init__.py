@@ -57,9 +57,27 @@ class AbBleScanner(BaseHaRemoteScanner):
     def async_on_mqtt_message(self, msg: ReceiveMessage) -> None:
         """Call the registered callback."""
         try:
-            for d in msgpack.unpackb(msg.payload, raw=True)[b'devices']:
+            # Use strict=False to handle any extra data in the msgpack payload
+            unpacked_data = msgpack.unpackb(msg.payload, raw=True, strict=False)
+            
+            if b'devices' not in unpacked_data:
+                _LOGGER.warning("Received MQTT message without 'devices' key")
+                return
+                
+            for d in unpacked_data[b'devices']:
                 raw_data = parse_ap_ble_devices_data(d)
                 adv = parse_raw_data(raw_data)
+                
+                # Ensure we have valid advertisement data
+                if adv is None:
+                    _LOGGER.debug("Invalid advertisement data, skipping")
+                    continue
+                    
+                # Check if we have all required fields
+                required_fields = ['address', 'rssi', 'local_name', 'service_uuids', 'service_data', 'manufacturer_data']
+                if not all(field in adv for field in required_fields):
+                    _LOGGER.debug(f"Missing required fields in advertisement data: {adv}")
+                    continue
 
                 self._async_on_advertisement(
                     address=adv['address'].upper(),
@@ -71,9 +89,10 @@ class AbBleScanner(BaseHaRemoteScanner):
                     tx_power=None,
                     details=dict(),
                     # the msg.payload does have a field "time" but its time passed since boot and I don't know how to figure out the boot timestamp so we just use the current time here
-                    advertisement_monotonic_time=MONOTONIC_TIME()            )
+                    advertisement_monotonic_time=MONOTONIC_TIME()
+                )
         except Exception as err:
-            _LOGGER.error(err)
+            _LOGGER.error(f"Error processing MQTT message: {err}")
         return
 
 
