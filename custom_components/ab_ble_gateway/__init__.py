@@ -63,13 +63,27 @@ _LOGGER = logging.getLogger(LOGGER_NAME)
 def set_log_level():
     """Set the log level for this integration's logger."""
     try:
-        level = getattr(logging, DEFAULT_LOG_LEVEL)
+        # Make sure we use a high-enough log level to catch issues
+        level = getattr(logging, "DEBUG")
         _LOGGER.setLevel(level)
-        _LOGGER.info(f"AB BLE Gateway logger initialized with level {DEFAULT_LOG_LEVEL}")
+        
+        # Configure the logger to show up in Home Assistant logs
+        homeassistant_logger = logging.getLogger("homeassistant.components.ab_ble_gateway")
+        homeassistant_logger.setLevel(level)
+        
+        # Create a stream handler if none exists
+        if not _LOGGER.handlers:
+            console_handler = logging.StreamHandler()
+            console_handler.setLevel(level)
+            formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+            console_handler.setFormatter(formatter)
+            _LOGGER.addHandler(console_handler)
+        
+        _LOGGER.debug(f"AB BLE Gateway logger initialized with level DEBUG")
     except (AttributeError, TypeError) as err:
         _LOGGER.error(f"Failed to set log level: {err}")
-        _LOGGER.setLevel(logging.INFO)
-        _LOGGER.info("Defaulting to INFO log level")
+        _LOGGER.setLevel(logging.DEBUG)
+        _LOGGER.debug("Defaulting to DEBUG log level")
 
 
 class AbBleScanner(BaseHaRemoteScanner):
@@ -253,72 +267,102 @@ async def async_clean_failed_entries(hass, dry_run=False):
 
 async def async_reconnect_gateway(hass: HomeAssistant, entity_id=None):
     """Service call to safely reconnect the BLE Gateway."""
-    _LOGGER.info(f"Reconnect service called with entity_id: {entity_id}")
+    _LOGGER.debug(f"Reconnect service called with entity_id: {entity_id}")
+    result = False
     
     try:
+        # Check if the domain data exists
+        if DOMAIN not in hass.data or not hass.data[DOMAIN]:
+            _LOGGER.error(f"No {DOMAIN} data in Home Assistant data dictionary")
+            return False
+            
+        # Log all current entries for debugging
+        _LOGGER.debug(f"Current entries in DOMAIN data: {list(hass.data[DOMAIN].keys())}")
+        
         # Map the entity_id to entry_id if provided
         entry_id = None
         if entity_id is not None:
             # Extract the entry_id from configuration_entries
             for domain_entry_id, domain_data in hass.data[DOMAIN].items():
-                if "scanner" in domain_data:
-                    scanner = domain_data["scanner"]
-                    # Basic check to see if this scanner might match the entity
-                    if scanner and scanner.name and scanner.name in entity_id:
-                        entry_id = domain_entry_id
-                        break
+                try:
+                    if "scanner" in domain_data:
+                        scanner = domain_data["scanner"]
+                        # Basic check to see if this scanner might match the entity
+                        if scanner and scanner.name:
+                            _LOGGER.debug(f"Found scanner with name: {scanner.name}")
+                            if scanner.name in entity_id:
+                                entry_id = domain_entry_id
+                                _LOGGER.debug(f"Matched scanner to entity_id, entry_id: {entry_id}")
+                                break
+                except Exception as inner_err:
+                    _LOGGER.error(f"Error while checking scanner entry {domain_entry_id}: {inner_err}")
             
             if entry_id is None:
                 _LOGGER.warning(f"Could not map entity_id {entity_id} to a gateway entry_id")
         
         # If no specific entry ID was provided or found, try to reconnect all gateways
         if entry_id is None:
-            _LOGGER.info("Reconnecting all gateways")
+            _LOGGER.debug("Reconnecting all gateways")
+            any_success = False
             for domain_entry_id, entry_data in hass.data[DOMAIN].items():
-                if "scanner" in entry_data:
-                    await _reconnect_single_gateway(hass, domain_entry_id)
+                try:
+                    if "scanner" in entry_data:
+                        reconnect_result = await _reconnect_single_gateway(hass, domain_entry_id)
+                        any_success = any_success or reconnect_result
+                except Exception as reconnect_err:
+                    _LOGGER.error(f"Error reconnecting gateway {domain_entry_id}: {reconnect_err}")
+            result = any_success
         else:
             # Reconnect only the specified entry
             if entry_id in hass.data[DOMAIN]:
-                _LOGGER.info(f"Reconnecting specific gateway: {entry_id}")
-                await _reconnect_single_gateway(hass, entry_id)
+                _LOGGER.debug(f"Reconnecting specific gateway: {entry_id}")
+                result = await _reconnect_single_gateway(hass, entry_id)
             else:
                 _LOGGER.warning(f"Cannot reconnect: Entry ID {entry_id} not found")
                 
-        return True
+        return result
     except Exception as e:
-        _LOGGER.error(f"Error during gateway reconnection: {e}")
+        _LOGGER.error(f"Unhandled error during gateway reconnection: {e}")
         return False
 
 
 async def _reconnect_single_gateway(hass: HomeAssistant, entry_id):
     """Safely reconnect a single gateway by entry_id."""
     
-    entry_data = hass.data[DOMAIN][entry_id]
-    
-    if "scanner" not in entry_data or "hass" not in entry_data:
-        _LOGGER.warning(f"Cannot reconnect {entry_id}: Missing scanner or hass reference")
-        return
-    
-    _LOGGER.info(f"Reconnecting gateway {entry_id}")
-    
-    scanner = entry_data["scanner"]
-    
     try:
+        # Safely get entry data
+        if DOMAIN not in hass.data:
+            _LOGGER.error(f"Domain {DOMAIN} not in hass.data")
+            return False
+            
+        if entry_id not in hass.data[DOMAIN]:
+            _LOGGER.error(f"Entry {entry_id} not in hass.data[{DOMAIN}]")
+            return False
+            
+        entry_data = hass.data[DOMAIN][entry_id]
+        
+        if "scanner" not in entry_data:
+            _LOGGER.warning(f"Cannot reconnect {entry_id}: Missing scanner reference")
+            return False
+        
+        _LOGGER.debug(f"Reconnecting gateway {entry_id}")
+        
+        scanner = entry_data["scanner"]
+        
         # Get the entry to access its data
         config_entries = hass.config_entries
         entry = next((e for e in config_entries.async_entries(DOMAIN) if e.entry_id == entry_id), None)
         
         if not entry:
             _LOGGER.error(f"Cannot find configuration entry for {entry_id}")
-            return
+            return False
             
         config = entry.as_dict()
         mqtt_topic = config.get('data', {}).get('mqtt_topic')
         
         if not mqtt_topic:
             _LOGGER.error(f"Missing mqtt_topic for {entry_id}")
-            return
+            return False
             
         # Update gateway sensor to show reconnection in progress
         attributes = {
@@ -331,30 +375,41 @@ async def _reconnect_single_gateway(hass: HomeAssistant, entry_id):
         }
         
         # Set status to reconnecting
-        hass.states.async_set(
-            "sensor.ble_gateway_raw_data", 
-            "reconnecting", 
-            attributes
-        )
+        try:
+            hass.states.async_set(
+                "sensor.ble_gateway_raw_data", 
+                "reconnecting", 
+                attributes
+            )
+            _LOGGER.debug(f"Set gateway state to reconnecting")
+        except Exception as state_err:
+            _LOGGER.error(f"Failed to update gateway state: {state_err}")
         
         # Attempt to resubscribe to MQTT topic
-        _LOGGER.info(f"Resubscribing to MQTT topic {mqtt_topic}")
+        _LOGGER.debug(f"Resubscribing to MQTT topic {mqtt_topic}")
         
-        # Add detailed error checking for the MQTT subscription
-        try:
-            # Ensure MQTT component is ready
-            if not hass.data.get("mqtt"):
-                _LOGGER.error("MQTT component not ready. Cannot subscribe.")
-                raise RuntimeError("MQTT component not ready")
-                
-            # Try to unsubscribe first to clean up any existing subscriptions
-            try:
-                await mqtt.async_unsubscribe(hass, mqtt_topic, scanner.async_on_mqtt_message)
-                _LOGGER.debug(f"Successfully unsubscribed from {mqtt_topic}")
-            except Exception as unsub_err:
-                _LOGGER.debug(f"No active subscription to unsubscribe from: {unsub_err}")
+        # Check if MQTT component is ready
+        if not hass.data.get("mqtt"):
+            _LOGGER.error("MQTT component not ready. Cannot subscribe.")
+            return False
+        
+        # Get MQTT data and make sure client is available
+        mqtt_data = hass.data.get("mqtt", {})
+        if not mqtt_data or not hasattr(mqtt_data, 'client') or mqtt_data.client is None:
+            _LOGGER.error("MQTT client not available")
+            return False
             
-            # Now resubscribe
+        # Try to unsubscribe first to clean up any existing subscriptions
+        try:
+            # We'll try unsubscribing but don't fail if it doesn't work
+            await mqtt.async_unsubscribe(hass, mqtt_topic, scanner.async_on_mqtt_message)
+            _LOGGER.debug(f"Successfully unsubscribed from {mqtt_topic}")
+        except Exception as unsub_err:
+            _LOGGER.debug(f"No active subscription to unsubscribe from: {unsub_err}")
+        
+        # Now resubscribe
+        subscription = None
+        try:
             subscription = await mqtt.async_subscribe(
                 hass, 
                 mqtt_topic, 
@@ -363,43 +418,54 @@ async def _reconnect_single_gateway(hass: HomeAssistant, entry_id):
             )
             
             if subscription is None:
-                raise RuntimeError(f"Failed to subscribe to MQTT topic {mqtt_topic}")
+                _LOGGER.error(f"Failed to subscribe to MQTT topic {mqtt_topic}")
+                return False
                 
-            _LOGGER.info(f"Successfully subscribed to MQTT topic {mqtt_topic}")
+            _LOGGER.debug(f"Successfully subscribed to MQTT topic {mqtt_topic}")
         except Exception as mqtt_err:
             _LOGGER.error(f"MQTT subscription error: {mqtt_err}")
-            raise
+            return False
         
         # Update gateway sensor to show connected again
         attributes["gateway_status"] = "Connected"
         attributes["last_scan"] = datetime.datetime.now().isoformat()
         
-        hass.states.async_set(
-            "sensor.ble_gateway_raw_data", 
-            "online", 
-            attributes
-        )
+        try:
+            hass.states.async_set(
+                "sensor.ble_gateway_raw_data", 
+                "online", 
+                attributes
+            )
+            _LOGGER.debug(f"Set gateway state to online")
+        except Exception as state_err:
+            _LOGGER.error(f"Failed to update gateway state: {state_err}")
         
         _LOGGER.info(f"Successfully reconnected gateway {entry_id}")
+        return True
         
     except Exception as err:
         _LOGGER.error(f"Error during reconnection of {entry_id}: {err}")
         
         # Update sensor to show error
-        attributes = {
-            "friendly_name": "BLE Gateway",
-            "icon": "mdi:bluetooth-off",
-            "devices": [],
-            "gateway_id": "AprilBrother-Gateway4", 
-            "gateway_status": f"Error: {str(err)}",
-            "last_scan": datetime.datetime.now().isoformat()
-        }
-        
-        hass.states.async_set(
-            "sensor.ble_gateway_raw_data", 
-            "error", 
-            attributes
-        )
+        try:
+            attributes = {
+                "friendly_name": "BLE Gateway",
+                "icon": "mdi:bluetooth-off",
+                "devices": [],
+                "gateway_id": "AprilBrother-Gateway4", 
+                "gateway_status": f"Error: {str(err)}",
+                "last_scan": datetime.datetime.now().isoformat()
+            }
+            
+            hass.states.async_set(
+                "sensor.ble_gateway_raw_data", 
+                "error", 
+                attributes
+            )
+        except Exception as final_err:
+            _LOGGER.error(f"Final error handling failure: {final_err}")
+            
+        return False
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
@@ -428,7 +494,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         SERVICE_RECONNECT,
         async_reconnect_gateway,
         schema=vol.Schema({
-            vol.Optional(ATTR_ENTITY_ID): cv.string,
+            vol.Optional("entity_id"): cv.string,
         }),
     )
     

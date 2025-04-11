@@ -18,7 +18,6 @@ reconnect:
       name: Entity ID
       description: The ID of the specific gateway to reconnect. Leave empty to reconnect all gateways.
       required: false
+      example: "sensor.ble_gateway_raw_data"
       selector:
-        entity:
-          domain: sensor
-          integration: ab_ble_gateway
+        text:
