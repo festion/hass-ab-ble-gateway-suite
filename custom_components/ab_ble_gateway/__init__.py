@@ -1,6 +1,7 @@
 """The April Brother BLE Gateway integration."""
 from __future__ import annotations
 import os
+from datetime import datetime
 from homeassistant.components.bluetooth import BaseHaRemoteScanner
 from .util import parse_ap_ble_devices_data, parse_raw_data
 from homeassistant.helpers.dispatcher import (
@@ -101,16 +102,29 @@ class AbBleScanner(BaseHaRemoteScanner):
             
             # For debugging: log the devices we received
             try:
-                device_macs = [d[1] if isinstance(d, list) and len(d) > 1 else str(d) for d in devices]
-                _LOGGER.info(f"Received data for devices: {device_macs[:5]}")
-                if len(device_macs) > 5:
-                    _LOGGER.info(f"...and {len(device_macs) - 5} more devices")
-            except Exception:
-                pass
+                # Make sure devices is iterable
+                if isinstance(devices, list):
+                    device_macs = [d[1] if isinstance(d, list) and len(d) > 1 else str(d) for d in devices]
+                    _LOGGER.info(f"Received data for devices: {device_macs[:5]}")
+                    if len(device_macs) > 5:
+                        _LOGGER.info(f"...and {len(device_macs) - 5} more devices")
+                else:
+                    _LOGGER.warning(f"Devices data is not a list: {type(devices)}")
+            except Exception as e:
+                _LOGGER.debug(f"Error logging device info: {e}")
                 
-            # Process each device
+            # Process each device, but first make sure devices is iterable
+            if not isinstance(devices, list):
+                _LOGGER.warning(f"Cannot process devices: expected list but got {type(devices)}")
+                return
+                
             for d in devices:
                 try:
+                    # Check that we have a valid device entry
+                    if not isinstance(d, (list, tuple)) or len(d) < 2:
+                        _LOGGER.debug(f"Skipping invalid device entry: {d}")
+                        continue
+                        
                     raw_data = parse_ap_ble_devices_data(d)
                     adv = parse_raw_data(raw_data)
                     
