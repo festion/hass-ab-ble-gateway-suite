@@ -1,7 +1,7 @@
 """The April Brother BLE Gateway integration."""
 from __future__ import annotations
 import os
-from datetime import datetime
+import datetime
 from homeassistant.components.bluetooth import BaseHaRemoteScanner
 from .util import parse_ap_ble_devices_data, parse_raw_data
 from homeassistant.helpers.dispatcher import (
@@ -139,6 +139,7 @@ class AbBleScanner(BaseHaRemoteScanner):
                         continue
     
                     # Process the advertisement
+                    monotonic_time = MONOTONIC_TIME()
                     self._async_on_advertisement(
                         address=adv['address'].upper(),
                         rssi=adv['rssi'],
@@ -148,7 +149,7 @@ class AbBleScanner(BaseHaRemoteScanner):
                         manufacturer_data=adv['manufacturer_data'],
                         tx_power=None,
                         details=dict(),
-                        advertisement_monotonic_time=MONOTONIC_TIME()
+                        advertisement_monotonic_time=[monotonic_time]  # Wrap in a list as it expects an iterable
                     )
                     processed_count += 1
                 except Exception as device_err:
@@ -279,7 +280,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             "devices": [],
             "gateway_id": "AprilBrother-Gateway4",
             "gateway_status": "Connected",
-            "last_scan": datetime.now().isoformat()
+            "last_scan": datetime.datetime.now().isoformat()
         }
         
         # Create/update the sensor directly 
