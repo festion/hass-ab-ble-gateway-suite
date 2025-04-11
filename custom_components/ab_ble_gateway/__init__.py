@@ -183,10 +183,15 @@ class AbBleScanner(BaseHaRemoteScanner):
                         _LOGGER.debug(f"Missing required fields in advertisement: {list(adv.keys())}")
                         continue
     
-                    # Process the advertisement
+                    # Get the monotonic time
                     monotonic_time = MONOTONIC_TIME()
+                    
+                    # Use a simple flag to track if we succeeded in any approach
+                    success = False
+                    
+                    # APPROACH 1: Modern API with monotonic_time as list
                     try:
-                        # First try with the expected modern API (monotonic_time as a list)
+                        _LOGGER.debug("Trying approach 1: list wrapper")
                         self._async_on_advertisement(
                             address=adv['address'].upper(),
                             rssi=adv['rssi'],
@@ -196,17 +201,35 @@ class AbBleScanner(BaseHaRemoteScanner):
                             manufacturer_data=adv['manufacturer_data'],
                             tx_power=None,
                             details=dict(),
-                            advertisement_monotonic_time=[monotonic_time]  # Wrap in a list as it expects an iterable
+                            advertisement_monotonic_time=[monotonic_time]
                         )
-                    except TypeError as type_err:
-                        # Check if we get a TypeError related to the advertisement_monotonic_time parameter
-                        error_msg = str(type_err)
-                        _LOGGER.debug(f"TypeError in advertisement processing: {error_msg}")
+                        success = True
+                    except Exception as err1:
+                        _LOGGER.debug(f"Approach 1 failed: {err1}")
                         
-                        if "argument of type 'int' is not iterable" in error_msg:
-                            # The error indicates we're passing an int where an iterable is expected
-                            # Let's try to pass a single-item list instead of a bare int
-                            _LOGGER.debug("Detected int vs iterable error, trying with an explicit list")
+                    # If first approach failed, try the second
+                    if not success:
+                        # APPROACH 2: Older API without monotonic_time
+                        try:
+                            _LOGGER.debug("Trying approach 2: no monotonic time")
+                            self._async_on_advertisement(
+                                address=adv['address'].upper(),
+                                rssi=adv['rssi'],
+                                local_name=adv['local_name'],
+                                service_uuids=adv['service_uuids'],
+                                service_data=adv['service_data'],
+                                manufacturer_data=adv['manufacturer_data'],
+                                tx_power=None
+                            )
+                            success = True
+                        except Exception as err2:
+                            _LOGGER.debug(f"Approach 2 failed: {err2}")
+                    
+                    # If still no success, try a third approach
+                    if not success:
+                        # APPROACH 3: Modern API with bare monotonic_time
+                        try:
+                            _LOGGER.debug("Trying approach 3: bare monotonic time")
                             self._async_on_advertisement(
                                 address=adv['address'].upper(),
                                 rssi=adv['rssi'],
@@ -216,27 +239,37 @@ class AbBleScanner(BaseHaRemoteScanner):
                                 manufacturer_data=adv['manufacturer_data'],
                                 tx_power=None,
                                 details=dict(),
-                                advertisement_monotonic_time=[monotonic_time]  # Wrap in a list as it expects an iterable
+                                advertisement_monotonic_time=monotonic_time  # Try bare value
                             )
-                        elif "advertisement_monotonic_time" in error_msg:
-                            # Older API doesn't have the advertisement_monotonic_time parameter
-                            # Fall back to the old method signature
-                            _LOGGER.debug("Falling back to older API without monotonic time")
+                            success = True
+                        except Exception as err3:
+                            _LOGGER.debug(f"Approach 3 failed: {err3}")
+                    
+                    # If still no success, try a fourth approach
+                    if not success:
+                        # APPROACH 4: Minimal parameters
+                        try:
+                            _LOGGER.debug("Trying approach 4: minimal parameters")
                             self._async_on_advertisement(
                                 address=adv['address'].upper(),
                                 rssi=adv['rssi'],
                                 local_name=adv['local_name'],
                                 service_uuids=adv['service_uuids'],
                                 service_data=adv['service_data'],
-                                manufacturer_data=adv['manufacturer_data'],
-                                tx_power=None,
+                                manufacturer_data=adv['manufacturer_data']
                             )
-                        else:
-                            # Re-raise other TypeErrors
-                            raise
-                    processed_count += 1
+                            success = True
+                        except Exception as err4:
+                            _LOGGER.debug(f"Approach 4 failed: {err4}")
+                    
+                    # If any approach succeeded, increment the counter
+                    if success:
+                        processed_count += 1
+                    else:
+                        _LOGGER.error("All approaches failed to process advertisement!")
+                        
                 except Exception as device_err:
-                    # Log but continue with other devices
+                    # Log but continue processing other devices
                     _LOGGER.error(f"Error processing device data: {device_err}")
                     continue
             
