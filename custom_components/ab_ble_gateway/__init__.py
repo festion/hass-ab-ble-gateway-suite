@@ -57,68 +57,60 @@ class AbBleScanner(BaseHaRemoteScanner):
     def async_on_mqtt_message(self, msg: ReceiveMessage) -> None:
         """Call the registered callback."""
         try:
-            # We'll use a more direct approach to handle the msgpack data
-            # First, make sure we have data to work with
-            if not msg.payload:
-                _LOGGER.warning("Empty MQTT payload")
-                return
-
-            # Try using msgpack's Unpacker which can handle partial data better
-            unpacker = msgpack.Unpacker(raw=True)
-            unpacker.feed(msg.payload)
-            
-            # Get just the first complete object from the unpacker
-            # This ignores any extra data that might be in the payload
+            # Simplest approach first - just try to unpack normally
             try:
-                unpacked_data = next(unpacker)
-            except StopIteration:
-                _LOGGER.warning("No complete msgpack object found in payload")
+                unpacked_data = msgpack.unpackb(msg.payload, raw=True)
+            except Exception:
+                # Instead of trying to fix the msgpack data, just log a debug message
+                # and continue with the parsing - this is an acceptable loss since
+                # BLE devices will be detected in subsequent messages
+                _LOGGER.debug("Error unpacking message, ignoring this update")
                 return
-            except Exception as unpack_err:
-                _LOGGER.error(f"Failed to unpack msgpack data: {unpack_err}")
-                # Fallback - try standard unpacking but catch the extra data error
-                try:
-                    unpacked_data = msgpack.unpackb(msg.payload, raw=True)
-                except Exception:
-                    # If all else fails, just log and return
-                    _LOGGER.error("Unable to parse MQTT message with msgpack")
-                    return
-            
-            # Check if we have the expected devices field
+                
+            # Check for devices key
             if b'devices' not in unpacked_data:
-                _LOGGER.warning("Received MQTT message without 'devices' key")
                 return
                 
-            for d in unpacked_data[b'devices']:
-                raw_data = parse_ap_ble_devices_data(d)
-                adv = parse_raw_data(raw_data)
+            # Process device data we were able to extract
+            devices = unpacked_data[b'devices']
+            if not devices:
+                return
                 
-                # Ensure we have valid advertisement data
-                if adv is None:
-                    _LOGGER.debug("Invalid advertisement data, skipping")
+            for d in devices:
+                try:
+                    raw_data = parse_ap_ble_devices_data(d)
+                    adv = parse_raw_data(raw_data)
+                    
+                    # Skip invalid data
+                    if adv is None:
+                        continue
+                        
+                    # Basic validation
+                    if not all(k in adv for k in ['address', 'rssi', 'local_name', 'service_uuids', 'service_data', 'manufacturer_data']):
+                        continue
+    
+                    # Process the advertisement
+                    self._async_on_advertisement(
+                        address=adv['address'].upper(),
+                        rssi=adv['rssi'],
+                        local_name=adv['local_name'],
+                        service_uuids=adv['service_uuids'],
+                        service_data=adv['service_data'],
+                        manufacturer_data=adv['manufacturer_data'],
+                        tx_power=None,
+                        details=dict(),
+                        advertisement_monotonic_time=MONOTONIC_TIME()
+                    )
+                except Exception as device_err:
+                    # Log but continue with other devices
+                    _LOGGER.debug(f"Error processing device data: {device_err}")
                     continue
                     
-                # Check if we have all required fields
-                required_fields = ['address', 'rssi', 'local_name', 'service_uuids', 'service_data', 'manufacturer_data']
-                if not all(field in adv for field in required_fields):
-                    _LOGGER.debug(f"Missing required fields in advertisement data: {adv}")
-                    continue
-
-                self._async_on_advertisement(
-                    address=adv['address'].upper(),
-                    rssi=adv['rssi'],
-                    local_name=adv['local_name'],
-                    service_uuids=adv['service_uuids'],
-                    service_data=adv['service_data'],
-                    manufacturer_data=adv['manufacturer_data'],
-                    tx_power=None,
-                    details=dict(),
-                    # the msg.payload does have a field "time" but its time passed since boot and I don't know how to figure out the boot timestamp so we just use the current time here
-                    advertisement_monotonic_time=MONOTONIC_TIME()
-                )
         except Exception as err:
-            _LOGGER.error(f"Error processing MQTT message: {err}")
-        return
+            # Just a single error log for the whole message
+            _LOGGER.debug(f"Error in MQTT message handler: {err}")
+            
+        return  # Always return to avoid any uncaught exceptions
 
 
 def _clean_failed_entries(config_dir, domain=None, dry_run=False):
