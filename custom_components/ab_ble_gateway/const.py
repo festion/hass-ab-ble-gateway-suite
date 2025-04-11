@@ -8,7 +8,5 @@ SERVICE_RECONNECT = "reconnect"
 ATTR_DRY_RUN = "dry_run"
 
 # Logging
-LOGGER_NAME = "ab_ble_gateway"
-LOG_FILE = "ab_ble_gateway.log"
-LOG_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+LOGGER_NAME = "custom_components.ab_ble_gateway"
 DEFAULT_LOG_LEVEL = "INFO"

@@ -59,57 +59,19 @@ TWO_CHAR = re.compile("..")
 # No platform entities for this integration - it just registers BLE scanners
 PLATFORMS: list[Platform] = []
 
-# Set up custom logging
+# Use Home Assistant's built-in logging
 _LOGGER = logging.getLogger(LOGGER_NAME)
 
-def _setup_logger_sync(hass_config_dir, log_filename, log_format, log_level):
-    """Synchronous function to set up the logger, to be run in executor."""
+def set_log_level():
+    """Set the log level for this integration's logger."""
     try:
-        # Create logs directory if it doesn't exist
-        log_dir = Path(hass_config_dir) / "logs"
-        log_dir.mkdir(exist_ok=True)
-        
-        log_file = log_dir / log_filename
-        
-        # Configure the file handler
-        file_handler = logging.handlers.RotatingFileHandler(
-            log_file, 
-            maxBytes=10*1024*1024,  # 10MB max file size
-            backupCount=5,  # Keep 5 backup copies
-        )
-        
-        # Set log format
-        formatter = logging.Formatter(log_format)
-        file_handler.setFormatter(formatter)
-        
-        # Configure the logger
-        logger = logging.getLogger(LOGGER_NAME)
-        logger.setLevel(getattr(logging, log_level))
-        logger.addHandler(file_handler)
-        
-        return str(log_file)
-    except Exception as err:
-        return f"Error: {err}"
-
-
-async def setup_custom_logger(hass: HomeAssistant) -> None:
-    """Set up a custom logger for the AB BLE Gateway integration, avoiding blocking calls."""
-    try:
-        # Run the synchronous logger setup in the executor to avoid blocking the event loop
-        result = await hass.async_add_executor_job(
-            _setup_logger_sync,
-            hass.config.path(),
-            LOG_FILE,
-            LOG_FORMAT,
-            DEFAULT_LOG_LEVEL
-        )
-        
-        if result.startswith("Error:"):
-            _LOGGER.error(f"Failed to setup custom logger: {result}")
-        else:
-            _LOGGER.info(f"AB BLE Gateway logger initialized, logging to {result}")
-    except Exception as err:
-        _LOGGER.error(f"Exception during custom logger setup: {err}")
+        level = getattr(logging, DEFAULT_LOG_LEVEL)
+        _LOGGER.setLevel(level)
+        _LOGGER.info(f"AB BLE Gateway logger initialized with level {DEFAULT_LOG_LEVEL}")
+    except (AttributeError, TypeError) as err:
+        _LOGGER.error(f"Failed to set log level: {err}")
+        _LOGGER.setLevel(logging.INFO)
+        _LOGGER.info("Defaulting to INFO log level")
 
 
 class AbBleScanner(BaseHaRemoteScanner):
@@ -159,7 +121,7 @@ class AbBleScanner(BaseHaRemoteScanner):
             # We aren't going to try to update the sensor here as we don't have direct access to Home Assistant
             # The sensor should already be set up with the correct gateway info by async_setup_entry
             # This is just a placeholder for future expansion if needed
-            _LOGGER.info("Processing BLE gateway data")
+            _LOGGER.info(f"Processing BLE gateway data with {len(devices)} devices")
             
             # For debugging: log the devices we received
             try:
@@ -379,7 +341,36 @@ async def _reconnect_single_gateway(hass: HomeAssistant, entry_id):
         
         # Attempt to resubscribe to MQTT topic
         _LOGGER.info(f"Resubscribing to MQTT topic {mqtt_topic}")
-        await mqtt.async_subscribe(hass, mqtt_topic, scanner.async_on_mqtt_message, encoding=None)
+        
+        # Add detailed error checking for the MQTT subscription
+        try:
+            # Ensure MQTT component is ready
+            if not hass.data.get("mqtt"):
+                _LOGGER.error("MQTT component not ready. Cannot subscribe.")
+                raise RuntimeError("MQTT component not ready")
+                
+            # Try to unsubscribe first to clean up any existing subscriptions
+            try:
+                await mqtt.async_unsubscribe(hass, mqtt_topic, scanner.async_on_mqtt_message)
+                _LOGGER.debug(f"Successfully unsubscribed from {mqtt_topic}")
+            except Exception as unsub_err:
+                _LOGGER.debug(f"No active subscription to unsubscribe from: {unsub_err}")
+            
+            # Now resubscribe
+            subscription = await mqtt.async_subscribe(
+                hass, 
+                mqtt_topic, 
+                scanner.async_on_mqtt_message, 
+                encoding=None
+            )
+            
+            if subscription is None:
+                raise RuntimeError(f"Failed to subscribe to MQTT topic {mqtt_topic}")
+                
+            _LOGGER.info(f"Successfully subscribed to MQTT topic {mqtt_topic}")
+        except Exception as mqtt_err:
+            _LOGGER.error(f"MQTT subscription error: {mqtt_err}")
+            raise
         
         # Update gateway sensor to show connected again
         attributes["gateway_status"] = "Connected"
@@ -417,8 +408,8 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Set up the AB BLE Gateway component."""
     hass.data.setdefault(DOMAIN, {})
     
-    # Set up the custom logger (using await to properly wait for the async operation)
-    await setup_custom_logger(hass)
+    # Set the log level for the integration
+    set_log_level()
     _LOGGER.info("AB BLE Gateway integration starting setup")
     
     # Register services
@@ -491,8 +482,32 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         _LOGGER.info("Created/Updated BLE gateway status sensor")
     except Exception as err:
         _LOGGER.warning(f"Could not create gateway sensor: {err}")
+    
+    # Set up the MQTT subscription with proper error handling
+    try:
+        _LOGGER.info(f"Subscribing to MQTT topic: {mqtt_topic}")
         
-    await mqtt.async_subscribe(hass, mqtt_topic, scanner.async_on_mqtt_message, encoding=None)
+        # Ensure MQTT component is ready
+        if not hass.data.get("mqtt"):
+            _LOGGER.error("MQTT component not ready. Cannot subscribe.")
+            return False
+        
+        # Subscribe to the topic
+        subscription = await mqtt.async_subscribe(
+            hass, 
+            mqtt_topic, 
+            scanner.async_on_mqtt_message, 
+            encoding=None
+        )
+        
+        if subscription is None:
+            _LOGGER.error(f"Failed to subscribe to MQTT topic {mqtt_topic}")
+            return False
+            
+        _LOGGER.info(f"Successfully subscribed to MQTT topic {mqtt_topic}")
+    except Exception as mqtt_err:
+        _LOGGER.error(f"Failed to set up MQTT subscription: {mqtt_err}")
+        return False
     
     # Register the scanner
     unregister = async_register_scanner(hass, scanner, True)
