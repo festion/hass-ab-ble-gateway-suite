@@ -62,14 +62,14 @@ PLATFORMS: list[Platform] = []
 # Set up custom logging
 _LOGGER = logging.getLogger(LOGGER_NAME)
 
-def setup_custom_logger(hass: HomeAssistant) -> None:
-    """Set up a custom logger for the AB BLE Gateway integration."""
+def _setup_logger_sync(hass_config_dir, log_filename, log_format, log_level):
+    """Synchronous function to set up the logger, to be run in executor."""
     try:
         # Create logs directory if it doesn't exist
-        log_dir = Path(hass.config.path("logs"))
+        log_dir = Path(hass_config_dir) / "logs"
         log_dir.mkdir(exist_ok=True)
         
-        log_file = log_dir / LOG_FILE
+        log_file = log_dir / log_filename
         
         # Configure the file handler
         file_handler = logging.handlers.RotatingFileHandler(
@@ -79,17 +79,37 @@ def setup_custom_logger(hass: HomeAssistant) -> None:
         )
         
         # Set log format
-        formatter = logging.Formatter(LOG_FORMAT)
+        formatter = logging.Formatter(log_format)
         file_handler.setFormatter(formatter)
         
         # Configure the logger
         logger = logging.getLogger(LOGGER_NAME)
-        logger.setLevel(getattr(logging, DEFAULT_LOG_LEVEL))
+        logger.setLevel(getattr(logging, log_level))
         logger.addHandler(file_handler)
         
-        logger.info(f"AB BLE Gateway logger initialized, logging to {log_file}")
+        return str(log_file)
     except Exception as err:
-        _LOGGER.error(f"Failed to setup custom logger: {err}")
+        return f"Error: {err}"
+
+
+async def setup_custom_logger(hass: HomeAssistant) -> None:
+    """Set up a custom logger for the AB BLE Gateway integration, avoiding blocking calls."""
+    try:
+        # Run the synchronous logger setup in the executor to avoid blocking the event loop
+        result = await hass.async_add_executor_job(
+            _setup_logger_sync,
+            hass.config.path(),
+            LOG_FILE,
+            LOG_FORMAT,
+            DEFAULT_LOG_LEVEL
+        )
+        
+        if result.startswith("Error:"):
+            _LOGGER.error(f"Failed to setup custom logger: {result}")
+        else:
+            _LOGGER.info(f"AB BLE Gateway logger initialized, logging to {result}")
+    except Exception as err:
+        _LOGGER.error(f"Exception during custom logger setup: {err}")
 
 
 class AbBleScanner(BaseHaRemoteScanner):
@@ -271,19 +291,36 @@ async def async_clean_failed_entries(hass, dry_run=False):
     )
 
 
-async def async_reconnect_gateway(hass: HomeAssistant, entry_id=None):
+async def async_reconnect_gateway(hass: HomeAssistant, entity_id=None):
     """Service call to safely reconnect the BLE Gateway."""
-    _LOGGER.info("Reconnect service called")
+    _LOGGER.info(f"Reconnect service called with entity_id: {entity_id}")
     
     try:
-        # If no specific entry ID is provided, try to reconnect all gateways
+        # Map the entity_id to entry_id if provided
+        entry_id = None
+        if entity_id is not None:
+            # Extract the entry_id from configuration_entries
+            for domain_entry_id, domain_data in hass.data[DOMAIN].items():
+                if "scanner" in domain_data:
+                    scanner = domain_data["scanner"]
+                    # Basic check to see if this scanner might match the entity
+                    if scanner and scanner.name and scanner.name in entity_id:
+                        entry_id = domain_entry_id
+                        break
+            
+            if entry_id is None:
+                _LOGGER.warning(f"Could not map entity_id {entity_id} to a gateway entry_id")
+        
+        # If no specific entry ID was provided or found, try to reconnect all gateways
         if entry_id is None:
-            for entry_id, entry_data in hass.data[DOMAIN].items():
+            _LOGGER.info("Reconnecting all gateways")
+            for domain_entry_id, entry_data in hass.data[DOMAIN].items():
                 if "scanner" in entry_data:
-                    await _reconnect_single_gateway(hass, entry_id)
+                    await _reconnect_single_gateway(hass, domain_entry_id)
         else:
             # Reconnect only the specified entry
             if entry_id in hass.data[DOMAIN]:
+                _LOGGER.info(f"Reconnecting specific gateway: {entry_id}")
                 await _reconnect_single_gateway(hass, entry_id)
             else:
                 _LOGGER.warning(f"Cannot reconnect: Entry ID {entry_id} not found")
@@ -380,8 +417,8 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Set up the AB BLE Gateway component."""
     hass.data.setdefault(DOMAIN, {})
     
-    # Set up the custom logger
-    setup_custom_logger(hass)
+    # Set up the custom logger (using await to properly wait for the async operation)
+    await setup_custom_logger(hass)
     _LOGGER.info("AB BLE Gateway integration starting setup")
     
     # Register services
