@@ -247,7 +247,9 @@ def create_ble_gateway_sensor():
                 "attributes": {
                     "friendly_name": "BLE Gateway",
                     "icon": "mdi:bluetooth-connect",
-                    "devices": []
+                    "devices": [],
+                    "gateway_id": "AprilBrother-Gateway4",
+                    "gateway_status": "Connected"
                 }
             }
             
@@ -968,7 +970,9 @@ def trigger_bluetooth_scan():
                     "attributes": {
                         "friendly_name": "BLE Gateway",
                         "icon": "mdi:bluetooth-connect",
-                        "devices": simulated_devices
+                        "devices": simulated_devices,
+                        "gateway_id": "AprilBrother-Gateway4",
+                        "gateway_status": "Connected"
                     }
                 }
                 
@@ -1405,7 +1409,9 @@ def main(log_level, scan_interval, gateway_topic=DEFAULT_GATEWAY_TOPIC):
                         "devices": discovered_devices,
                         "last_scan": datetime.now().isoformat(),
                         "adaptive_scan": True,
-                        "activity_level": activity_level
+                        "activity_level": activity_level,
+                        "gateway_id": "AprilBrother-Gateway4",
+                        "gateway_status": "Connected"
                     }
                 }
                 

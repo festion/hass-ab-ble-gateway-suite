@@ -131,6 +131,7 @@ cards:
         entities:
           - entity: sensor.ble_gateway_raw_data
             name: BLE Gateway Status
+            secondary_info: "{{ state_attr('sensor.ble_gateway_raw_data', 'gateway_id') or 'Unknown' }}"
           - type: conditional
             conditions:
               - entity: input_text.discovered_ble_devices
