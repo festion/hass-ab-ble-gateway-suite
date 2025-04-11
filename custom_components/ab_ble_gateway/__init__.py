@@ -28,8 +28,6 @@ from .const import (
     SERVICE_RECONNECT,
     ATTR_DRY_RUN,
     LOGGER_NAME,
-    LOG_FILE,
-    LOG_FORMAT,
     DEFAULT_LOG_LEVEL
 )
 from homeassistant.components.bluetooth import (
