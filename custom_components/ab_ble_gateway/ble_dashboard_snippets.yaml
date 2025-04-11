@@ -17,10 +17,9 @@ cards:
         icon: mdi:connection
         tap_action:
           action: call-service
-          service: script.safe_reconnect_ble_gateway
+          service: ab_ble_gateway.mqtt_reconnect
           target: {}
-          data:
-            mqtt_topic: "gw/#"
+          data: {}
       - type: button
         name: Show Logs
         icon: mdi:text-box-outline
