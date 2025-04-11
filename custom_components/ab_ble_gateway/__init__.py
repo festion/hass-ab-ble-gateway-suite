@@ -126,9 +126,18 @@ class AbBleScanner(BaseHaRemoteScanner):
                 
             # Process device data
             devices = unpacked_data[b'devices']
+            
+            # Make sure we have devices and that they're in the expected format
             if not devices:
                 _LOGGER.info("No devices in payload")
                 return
+                
+            # Handle edge case where devices might not be a list
+            if not isinstance(devices, (list, tuple)):
+                _LOGGER.warning(f"Devices data is not a list or tuple: {type(devices)}")
+                if isinstance(devices, int):
+                    _LOGGER.warning("Received an integer instead of a list of devices, skipping processing")
+                    return
                 
             # We aren't going to try to update the sensor here as we don't have direct access to Home Assistant
             # The sensor should already be set up with the correct gateway info by async_setup_entry
@@ -175,17 +184,55 @@ class AbBleScanner(BaseHaRemoteScanner):
     
                     # Process the advertisement
                     monotonic_time = MONOTONIC_TIME()
-                    self._async_on_advertisement(
-                        address=adv['address'].upper(),
-                        rssi=adv['rssi'],
-                        local_name=adv['local_name'],
-                        service_uuids=adv['service_uuids'],
-                        service_data=adv['service_data'],
-                        manufacturer_data=adv['manufacturer_data'],
-                        tx_power=None,
-                        details=dict(),
-                        advertisement_monotonic_time=[monotonic_time]  # Wrap in a list as it expects an iterable
-                    )
+                    try:
+                        # First try with the expected modern API (monotonic_time as a list)
+                        self._async_on_advertisement(
+                            address=adv['address'].upper(),
+                            rssi=adv['rssi'],
+                            local_name=adv['local_name'],
+                            service_uuids=adv['service_uuids'],
+                            service_data=adv['service_data'],
+                            manufacturer_data=adv['manufacturer_data'],
+                            tx_power=None,
+                            details=dict(),
+                            advertisement_monotonic_time=[monotonic_time]  # Wrap in a list as it expects an iterable
+                        )
+                    except TypeError as type_err:
+                        # Check if we get a TypeError related to the advertisement_monotonic_time parameter
+                        error_msg = str(type_err)
+                        _LOGGER.debug(f"TypeError in advertisement processing: {error_msg}")
+                        
+                        if "argument of type 'int' is not iterable" in error_msg:
+                            # The error indicates we're passing an int where an iterable is expected
+                            # Let's try to pass a single-item list instead of a bare int
+                            _LOGGER.debug("Detected int vs iterable error, trying with an explicit list")
+                            self._async_on_advertisement(
+                                address=adv['address'].upper(),
+                                rssi=adv['rssi'],
+                                local_name=adv['local_name'],
+                                service_uuids=adv['service_uuids'],
+                                service_data=adv['service_data'],
+                                manufacturer_data=adv['manufacturer_data'],
+                                tx_power=None,
+                                details=dict(),
+                                advertisement_monotonic_time=[monotonic_time]  # Wrap in a list as it expects an iterable
+                            )
+                        elif "advertisement_monotonic_time" in error_msg:
+                            # Older API doesn't have the advertisement_monotonic_time parameter
+                            # Fall back to the old method signature
+                            _LOGGER.debug("Falling back to older API without monotonic time")
+                            self._async_on_advertisement(
+                                address=adv['address'].upper(),
+                                rssi=adv['rssi'],
+                                local_name=adv['local_name'],
+                                service_uuids=adv['service_uuids'],
+                                service_data=adv['service_data'],
+                                manufacturer_data=adv['manufacturer_data'],
+                                tx_power=None,
+                            )
+                        else:
+                            # Re-raise other TypeErrors
+                            raise
                     processed_count += 1
                 except Exception as device_err:
                     # Log but continue with other devices
