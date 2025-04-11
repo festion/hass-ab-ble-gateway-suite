@@ -557,66 +557,81 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     set_log_level()
     _LOGGER.info("AB BLE Gateway integration starting setup")
     
-    # Register our script with Home Assistant
-    try:
-        import os
-        import yaml
-        script_path = os.path.join(os.path.dirname(__file__), "scripts.yaml")
-        
-        if os.path.exists(script_path):
-            _LOGGER.info(f"Registering scripts from {script_path}")
-            
-            # Load custom scripts
-            with open(script_path, 'r') as file:
-                scripts = yaml.safe_load(file)
-                
-            # Add scripts to Home Assistant scripts directory
-            scripts_dir = os.path.join(hass.config.path(), "scripts")
-            os.makedirs(scripts_dir, exist_ok=True)
-            
-            # Write out the safe reconnect script
-            safe_reconnect_path = os.path.join(scripts_dir, "ab_ble_safe_reconnect.yaml")
-            
-            with open(safe_reconnect_path, 'w') as f:
-                yaml.dump({"safe_reconnect_ble_gateway": scripts["safe_reconnect_ble_gateway"]}, f)
-                
-            _LOGGER.info(f"Created safe reconnect script at {safe_reconnect_path}")
-            
-            # Create input_text entity for MQTT topic if not exists
-            input_path = os.path.join(os.path.dirname(__file__), "ble_input_text.yaml")
-            if os.path.exists(input_path):
-                _LOGGER.info(f"Registering input entities from {input_path}")
-                
-                # Load input entities
-                with open(input_path, 'r') as file:
-                    input_entities = yaml.safe_load(file)
+    # Handle file operations in the executor to avoid blocking
+    async def async_setup_scripts_and_inputs():
+        """Set up scripts and inputs using the executor for file operations."""
+        try:
+            # Define a function to run in the executor
+            def _setup_in_executor():
+                try:
+                    import os
+                    import yaml
+                    from pathlib import Path
                     
-                # Create input_text.yaml in config dir if it doesn't exist
-                input_text_path = os.path.join(hass.config.path(), "input_text.yaml")
+                    # Get paths
+                    component_dir = Path(__file__).parent
+                    script_path = component_dir / "scripts.yaml"
+                    input_path = component_dir / "ble_input_text.yaml"
+                    
+                    config_dir = Path(hass.config.path())
+                    scripts_dir = config_dir / "scripts"
+                    input_text_path = config_dir / "input_text.yaml"
+                    
+                    result = {"success": True, "messages": []}
+                    
+                    # Create scripts directory if needed
+                    scripts_dir.mkdir(exist_ok=True)
+                    
+                    # Process scripts
+                    if script_path.exists():
+                        try:
+                            # Copy the script file directly instead of parsing it
+                            safe_reconnect_path = scripts_dir / "ab_ble_safe_reconnect.yaml"
+                            safe_reconnect_path.write_text(script_path.read_text())
+                            result["messages"].append(f"Created script at {safe_reconnect_path}")
+                        except Exception as script_err:
+                            result["messages"].append(f"Error creating script: {script_err}")
+                    
+                    # Process input entities
+                    if input_path.exists():
+                        try:
+                            input_text = input_path.read_text()
+                            
+                            # If input_text.yaml doesn't exist, create it
+                            if not input_text_path.exists():
+                                input_text_path.write_text(input_text)
+                                result["messages"].append(f"Created input_text.yaml")
+                            else:
+                                # Simple approach: check if our content exists in the file
+                                existing_text = input_text_path.read_text()
+                                if "gateway_mqtt_topic" not in existing_text:
+                                    # Append our input entity to the file
+                                    with input_text_path.open("a") as f:
+                                        f.write("\n# Added by AB BLE Gateway integration\n")
+                                        f.write(input_text)
+                                    result["messages"].append(f"Updated input_text.yaml")
+                        except Exception as input_err:
+                            result["messages"].append(f"Error setting up inputs: {input_err}")
+                    
+                    return result
+                except Exception as e:
+                    return {"success": False, "messages": [f"Error in executor: {e}"]}
+            
+            # Run file operations in executor
+            _LOGGER.debug("Running script setup in executor")
+            result = await hass.async_add_executor_job(_setup_in_executor)
+            
+            # Log results
+            for message in result.get("messages", []):
+                _LOGGER.info(message)
                 
-                # If file exists, check if our entities are there, otherwise create it
-                if not os.path.exists(input_text_path):
-                    with open(input_text_path, 'w') as f:
-                        yaml.dump(input_entities, f)
-                        _LOGGER.info(f"Created input_text.yaml with gateway entities")
-                else:
-                    # Check if we need to update the file
-                    with open(input_text_path, 'r') as f:
-                        existing = yaml.safe_load(f) or {}
-                    
-                    # Add our entities if they don't exist
-                    updated = False
-                    for entity_id, config in input_entities.items():
-                        if entity_id not in existing:
-                            existing[entity_id] = config
-                            updated = True
-                    
-                    if updated:
-                        with open(input_text_path, 'w') as f:
-                            yaml.dump(existing, f)
-                            _LOGGER.info(f"Updated input_text.yaml with gateway entities")
-    except Exception as script_err:
-        _LOGGER.error(f"Failed to register scripts: {script_err}")
+            return result.get("success", False)
+        except Exception as err:
+            _LOGGER.error(f"Failed to set up scripts: {err}")
+            return False
+    
+    # Run the async setup
+    await async_setup_scripts_and_inputs()
     
     # Register services
     async_register_admin_service(

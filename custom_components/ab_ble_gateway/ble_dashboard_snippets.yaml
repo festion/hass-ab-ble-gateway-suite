@@ -20,7 +20,7 @@ cards:
           service: script.safe_reconnect_ble_gateway
           target: {}
           data:
-            mqtt_topic: "{{ states('input_text.gateway_mqtt_topic') or 'gw/#' }}"
+            mqtt_topic: "gw/#"
       - type: button
         name: Show Logs
         icon: mdi:text-box-outline

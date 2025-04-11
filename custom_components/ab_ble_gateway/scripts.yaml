@@ -1,5 +1,11 @@
 safe_reconnect_ble_gateway:
   description: Safely reconnect the BLE Gateway without restarting Home Assistant
+  fields:
+    mqtt_topic:
+      description: MQTT topic to subscribe to
+      example: "gw/#"
+      selector:
+        text:
   sequence:
     - service: persistent_notification.create
       data:
@@ -12,7 +18,7 @@ safe_reconnect_ble_gateway:
         
     - service: mqtt.subscribe
       data:
-        topic: !input "mqtt_topic"
+        topic: "{{ mqtt_topic }}"
         
     - service: persistent_notification.create
       data:
