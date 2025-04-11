@@ -14,3 +14,17 @@ safe_reconnect_ble_gateway:
     # We're not using any script steps directly anymore
     # The service handles all the notification and reconnection logic
     # This avoids any potential issues with the !input tag
+
+# This script is for backward compatibility with any dashboards using enhanced_ble_gateway_reconnect
+enhanced_ble_gateway_reconnect:
+  description: Enhanced BLE Gateway reconnect script for compatibility with existing dashboards
+  fields:
+    mqtt_topic:
+      description: MQTT topic to subscribe to (optional, defaults to gw/#)
+      example: "gw/#"
+      selector:
+        text:
+  sequence:
+    # Just call our dedicated service for maximum stability
+    - service: ab_ble_gateway.mqtt_reconnect
+      data: {}

@@ -28,3 +28,10 @@ reconnect:
       default: ""
       selector:
         text:
+
+mqtt_reconnect:
+  name: Direct MQTT Reconnect
+  description: >
+    Directly reconnect the BLE Gateway MQTT subscription without requiring a Home Assistant restart.
+    This is a simplified version of the reconnect service that's more reliable.
+  fields: {}
