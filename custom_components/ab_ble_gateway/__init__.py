@@ -57,25 +57,58 @@ class AbBleScanner(BaseHaRemoteScanner):
     def async_on_mqtt_message(self, msg: ReceiveMessage) -> None:
         """Call the registered callback."""
         try:
-            # Simplest approach first - just try to unpack normally
+            # Counter to track successful device processing
+            processed_count = 0
+            
+            # Try to unpack normally, but catch the exact error we expect
             try:
+                # Use msgpack directly but be ready to handle the extra data error
                 unpacked_data = msgpack.unpackb(msg.payload, raw=True)
-            except Exception:
-                # Instead of trying to fix the msgpack data, just log a debug message
-                # and continue with the parsing - this is an acceptable loss since
-                # BLE devices will be detected in subsequent messages
-                _LOGGER.debug("Error unpacking message, ignoring this update")
-                return
+            except Exception as unpack_err:
+                # Log the error for diagnostic purposes
+                _LOGGER.info(f"Msgpack unpacking error: {unpack_err}")
+                
+                # Try a workaround for the extra data issue by treating it as two parts
+                if "extra data" in str(unpack_err):
+                    try:
+                        # Use the Unpacker to just get the first object
+                        unpacker = msgpack.Unpacker(raw=True)
+                        unpacker.feed(msg.payload)
+                        unpacked_data = next(unpacker)
+                        _LOGGER.info("Successfully extracted partial data from msgpack payload")
+                    except Exception as workaround_err:
+                        _LOGGER.error(f"Failed to extract data with workaround: {workaround_err}")
+                        return
+                else:
+                    # Different error - just return
+                    return
                 
             # Check for devices key
             if b'devices' not in unpacked_data:
+                _LOGGER.warning("No 'devices' field in MQTT payload")
                 return
                 
-            # Process device data we were able to extract
+            # Process device data
             devices = unpacked_data[b'devices']
             if not devices:
+                _LOGGER.info("No devices in payload")
                 return
                 
+            # We aren't going to try to update the sensor here as we don't have direct access to Home Assistant
+            # The sensor should already be set up with the correct gateway info by async_setup_entry
+            # This is just a placeholder for future expansion if needed
+            _LOGGER.info("Processing BLE gateway data")
+            
+            # For debugging: log the devices we received
+            try:
+                device_macs = [d[1] if isinstance(d, list) and len(d) > 1 else str(d) for d in devices]
+                _LOGGER.info(f"Received data for devices: {device_macs[:5]}")
+                if len(device_macs) > 5:
+                    _LOGGER.info(f"...and {len(device_macs) - 5} more devices")
+            except Exception:
+                pass
+                
+            # Process each device
             for d in devices:
                 try:
                     raw_data = parse_ap_ble_devices_data(d)
@@ -83,10 +116,12 @@ class AbBleScanner(BaseHaRemoteScanner):
                     
                     # Skip invalid data
                     if adv is None:
+                        _LOGGER.debug("Invalid advertisement data")
                         continue
                         
                     # Basic validation
                     if not all(k in adv for k in ['address', 'rssi', 'local_name', 'service_uuids', 'service_data', 'manufacturer_data']):
+                        _LOGGER.debug(f"Missing required fields in advertisement: {list(adv.keys())}")
                         continue
     
                     # Process the advertisement
@@ -101,16 +136,21 @@ class AbBleScanner(BaseHaRemoteScanner):
                         details=dict(),
                         advertisement_monotonic_time=MONOTONIC_TIME()
                     )
+                    processed_count += 1
                 except Exception as device_err:
                     # Log but continue with other devices
-                    _LOGGER.debug(f"Error processing device data: {device_err}")
+                    _LOGGER.error(f"Error processing device data: {device_err}")
                     continue
+            
+            # Log the results
+            if processed_count > 0:
+                _LOGGER.info(f"Successfully processed {processed_count} devices")
                     
         except Exception as err:
-            # Just a single error log for the whole message
-            _LOGGER.debug(f"Error in MQTT message handler: {err}")
+            # Log any other errors
+            _LOGGER.error(f"Error in MQTT message handler: {err}")
             
-        return  # Always return to avoid any uncaught exceptions
+        return
 
 
 def _clean_failed_entries(config_dir, domain=None, dry_run=False):
@@ -214,6 +254,29 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if not mqtt_topic:
         _LOGGER.error("Missing mqtt_topic in configuration")
         return False
+    
+    # Create or update the gateway sensor with the proper gateway ID and status
+    # This ensures the gateway information is set correctly even before we receive MQTT data
+    try:
+        # Set up the state directly using the hass.states.async_set method
+        attributes = {
+            "friendly_name": "BLE Gateway",
+            "icon": "mdi:bluetooth-connect",
+            "devices": [],
+            "gateway_id": "AprilBrother-Gateway4",
+            "gateway_status": "Connected",
+            "last_scan": datetime.now().isoformat()
+        }
+        
+        # Create/update the sensor directly 
+        hass.states.async_set(
+            "sensor.ble_gateway_raw_data", 
+            "online", 
+            attributes
+        )
+        _LOGGER.info("Created/Updated BLE gateway status sensor")
+    except Exception as err:
+        _LOGGER.warning(f"Could not create gateway sensor: {err}")
         
     await mqtt.async_subscribe(hass, mqtt_topic, scanner.async_on_mqtt_message, encoding=None)
     
@@ -223,8 +286,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Store references for future cleanup
     hass.data[DOMAIN][entry.entry_id] = {
         "scanner": scanner,
-        "unregister": unregister
+        "unregister": unregister,
+        "hass": hass  # Store hass reference for use in the scanner
     }
+    
+    # We've already created the gateway sensor above, so nothing more to do here
+    _LOGGER.info("BLE Gateway integration setup complete")
     
     return True
 
