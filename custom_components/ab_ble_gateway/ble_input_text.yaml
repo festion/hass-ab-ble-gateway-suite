@@ -1,0 +1,4 @@
+gateway_mqtt_topic:
+  name: BLE Gateway MQTT Topic
+  icon: mdi:mqtt
+  initial: gw/#

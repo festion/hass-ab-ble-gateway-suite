@@ -1,0 +1,21 @@
+safe_reconnect_ble_gateway:
+  description: Safely reconnect the BLE Gateway without restarting Home Assistant
+  sequence:
+    - service: persistent_notification.create
+      data:
+        title: "BLE Gateway Reconnect"
+        message: "Attempting to reconnect the BLE Gateway... Please wait."
+        notification_id: "ble_gateway_reconnect"
+    
+    - delay:
+        seconds: 1
+        
+    - service: mqtt.subscribe
+      data:
+        topic: !input "mqtt_topic"
+        
+    - service: persistent_notification.create
+      data:
+        title: "BLE Gateway Reconnect"
+        message: "Reconnect attempt completed. Please check if the gateway is now receiving data."
+        notification_id: "ble_gateway_reconnect"

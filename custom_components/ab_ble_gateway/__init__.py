@@ -557,6 +557,67 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     set_log_level()
     _LOGGER.info("AB BLE Gateway integration starting setup")
     
+    # Register our script with Home Assistant
+    try:
+        import os
+        import yaml
+        script_path = os.path.join(os.path.dirname(__file__), "scripts.yaml")
+        
+        if os.path.exists(script_path):
+            _LOGGER.info(f"Registering scripts from {script_path}")
+            
+            # Load custom scripts
+            with open(script_path, 'r') as file:
+                scripts = yaml.safe_load(file)
+                
+            # Add scripts to Home Assistant scripts directory
+            scripts_dir = os.path.join(hass.config.path(), "scripts")
+            os.makedirs(scripts_dir, exist_ok=True)
+            
+            # Write out the safe reconnect script
+            safe_reconnect_path = os.path.join(scripts_dir, "ab_ble_safe_reconnect.yaml")
+            
+            with open(safe_reconnect_path, 'w') as f:
+                yaml.dump({"safe_reconnect_ble_gateway": scripts["safe_reconnect_ble_gateway"]}, f)
+                
+            _LOGGER.info(f"Created safe reconnect script at {safe_reconnect_path}")
+            
+            # Create input_text entity for MQTT topic if not exists
+            input_path = os.path.join(os.path.dirname(__file__), "ble_input_text.yaml")
+            if os.path.exists(input_path):
+                _LOGGER.info(f"Registering input entities from {input_path}")
+                
+                # Load input entities
+                with open(input_path, 'r') as file:
+                    input_entities = yaml.safe_load(file)
+                    
+                # Create input_text.yaml in config dir if it doesn't exist
+                input_text_path = os.path.join(hass.config.path(), "input_text.yaml")
+                
+                # If file exists, check if our entities are there, otherwise create it
+                if not os.path.exists(input_text_path):
+                    with open(input_text_path, 'w') as f:
+                        yaml.dump(input_entities, f)
+                        _LOGGER.info(f"Created input_text.yaml with gateway entities")
+                else:
+                    # Check if we need to update the file
+                    with open(input_text_path, 'r') as f:
+                        existing = yaml.safe_load(f) or {}
+                    
+                    # Add our entities if they don't exist
+                    updated = False
+                    for entity_id, config in input_entities.items():
+                        if entity_id not in existing:
+                            existing[entity_id] = config
+                            updated = True
+                    
+                    if updated:
+                        with open(input_text_path, 'w') as f:
+                            yaml.dump(existing, f)
+                            _LOGGER.info(f"Updated input_text.yaml with gateway entities")
+    except Exception as script_err:
+        _LOGGER.error(f"Failed to register scripts: {script_err}")
+    
     # Register services
     async_register_admin_service(
         hass,
