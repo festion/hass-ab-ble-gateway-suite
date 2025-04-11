@@ -35,102 +35,115 @@ if [ ! -f "/config/dashboards/btle_dashboard.yaml" ]; then
     cp /btle_dashboard.yaml /config/dashboards/
 fi
 
-# Create input helpers if they don't exist
-if [ ! -f "/config/input_text.yaml" ] || ! grep -q "discovered_ble_devices" "/config/input_text.yaml"; then
-    bashio::log.info "Ensuring input helpers are available..."
+# Check if input helpers exist
+if ! grep -q "discovered_ble_devices" "/config/input_text.yaml" 2>/dev/null; then
+    bashio::log.info "Required input helpers not found. Creating setup instructions..."
     
-    # Check if file exists first
-    if [ -f "/config/input_text.yaml" ]; then
-        # Append to existing file
-        cat /ble_input_text.yaml >> /config/input_text.yaml
-    else
-        # Create new file
-        cp /ble_input_text.yaml /config/input_text.yaml
-    fi
+    # Create a notification file to guide the user
+    INSTRUCTION_FILE="/config/ble_discovery/setup_instructions.md"
+    mkdir -p /config/ble_discovery
     
-    # Check if configuration.yaml is available and update it
-    if [ -f "/config/configuration.yaml" ]; then
-        bashio::log.info "Adding input helper references to configuration.yaml..."
-        
-        # Check if input_text: is already in configuration.yaml
-        if ! grep -q "^input_text:" "/config/configuration.yaml"; then
-            # Add input_text entries directly
-            echo "" >> /config/configuration.yaml
-            echo "# Added by BLE Discovery Add-on" >> /config/configuration.yaml
-            echo "input_text:" >> /config/configuration.yaml
-            echo "  discovered_ble_devices:" >> /config/configuration.yaml
-            echo "    name: Discovered BLE Devices" >> /config/configuration.yaml
-            echo "    initial: '{}'" >> /config/configuration.yaml
-            echo "    max: 1024" >> /config/configuration.yaml
-            echo "    icon: mdi:bluetooth-transfer" >> /config/configuration.yaml
-            echo "" >> /config/configuration.yaml
-            echo "  selected_ble_device:" >> /config/configuration.yaml
-            echo "    name: Selected BLE Device" >> /config/configuration.yaml
-            echo "    initial: ''" >> /config/configuration.yaml
-            echo "    max: 255" >> /config/configuration.yaml
-            echo "    icon: mdi:bluetooth" >> /config/configuration.yaml
-            echo "" >> /config/configuration.yaml
-            echo "  ble_device_name:" >> /config/configuration.yaml
-            echo "    name: BLE Device Name" >> /config/configuration.yaml
-            echo "    initial: ''" >> /config/configuration.yaml
-            echo "    max: 255" >> /config/configuration.yaml
-            echo "    icon: mdi:rename" >> /config/configuration.yaml
-            echo "" >> /config/configuration.yaml
-            echo "  ble_device_icon:" >> /config/configuration.yaml
-            echo "    name: BLE Device Icon" >> /config/configuration.yaml
-            echo "    initial: 'mdi:bluetooth'" >> /config/configuration.yaml
-            echo "    max: 255" >> /config/configuration.yaml
-            echo "    icon: mdi:pencil" >> /config/configuration.yaml
-        fi
-        
-        # Check if input_button: is already in configuration.yaml
-        if ! grep -q "^input_button:" "/config/configuration.yaml" && ! grep -q "input_button: !include" "/config/configuration.yaml"; then
-            # Add input_button directly
-            echo "input_button:" >> /config/configuration.yaml
-            echo "  bluetooth_scan:" >> /config/configuration.yaml
-            echo "    name: Bluetooth Scan" >> /config/configuration.yaml
-            echo "    icon: mdi:bluetooth-search" >> /config/configuration.yaml
-        fi
-        
-        # Check if input_select: is already in configuration.yaml
-        if ! grep -q "^input_select:" "/config/configuration.yaml" && ! grep -q "input_select: !include" "/config/configuration.yaml"; then
-            echo "# These entries added by BLE Discovery Add-on" >> /config/configuration.yaml
-            echo "input_select:" >> /config/configuration.yaml
-            echo "  ble_device_type:" >> /config/configuration.yaml
-            echo "    name: BLE Device Type" >> /config/configuration.yaml
-            echo "    options:" >> /config/configuration.yaml
-            echo "      - presence" >> /config/configuration.yaml
-            echo "      - temperature" >> /config/configuration.yaml
-            echo "      - humidity" >> /config/configuration.yaml
-            echo "      - motion" >> /config/configuration.yaml
-            echo "      - contact" >> /config/configuration.yaml
-            echo "      - button" >> /config/configuration.yaml
-            echo "      - light" >> /config/configuration.yaml
-            echo "      - lock" >> /config/configuration.yaml
-            echo "      - scale" >> /config/configuration.yaml
-            echo "      - wearable" >> /config/configuration.yaml
-            echo "      - speaker" >> /config/configuration.yaml
-            echo "      - other" >> /config/configuration.yaml
-            echo "    initial: presence" >> /config/configuration.yaml
-            echo "    icon: mdi:devices" >> /config/configuration.yaml
-        fi
-        
-        # Check if input_number: is already in configuration.yaml
-        if ! grep -q "^input_number:" "/config/configuration.yaml" && ! grep -q "input_number: !include" "/config/configuration.yaml"; then
-            echo "input_number:" >> /config/configuration.yaml
-            echo "  ble_rssi_threshold:" >> /config/configuration.yaml
-            echo "    name: BLE RSSI Threshold" >> /config/configuration.yaml
-            echo "    min: -100" >> /config/configuration.yaml
-            echo "    max: -40" >> /config/configuration.yaml
-            echo "    step: 1" >> /config/configuration.yaml
-            echo "    initial: -80" >> /config/configuration.yaml
-            echo "    unit_of_measurement: dBm" >> /config/configuration.yaml
-            echo "    icon: mdi:signal" >> /config/configuration.yaml
-        fi
-        
-        # Add a restart notification
-        bashio::log.warning "Configuration updated. A Home Assistant restart may be required for all components to appear."
-    fi
+    cat > "$INSTRUCTION_FILE" << 'EOF'
+# BLE Discovery Add-on Setup Instructions
+
+The add-on requires specific input helpers to function correctly. You need to add the following to your Home Assistant configuration.
+
+## Option 1: Add to Your Configuration Files
+
+Add these sections to your appropriate configuration files:
+
+### For input_text.yaml:
+```yaml
+discovered_ble_devices:
+  name: Discovered BLE Devices
+  initial: '{}'
+  max: 1024
+  icon: mdi:bluetooth-transfer
+
+selected_ble_device:
+  name: Selected BLE Device
+  initial: ''
+  max: 255
+  icon: mdi:bluetooth
+  
+ble_device_name:
+  name: BLE Device Name
+  initial: ''
+  max: 255
+  icon: mdi:rename
+  
+ble_device_icon:
+  name: BLE Device Icon
+  initial: 'mdi:bluetooth'
+  max: 255
+  icon: mdi:pencil
+```
+
+### For input_button.yaml (or in configuration.yaml):
+```yaml
+input_button:
+  bluetooth_scan:
+    name: Bluetooth Scan
+    icon: mdi:bluetooth-search
+```
+
+### For input_select.yaml:
+```yaml
+ble_device_type:
+  name: BLE Device Type
+  options:
+    - presence
+    - temperature
+    - humidity
+    - motion
+    - contact
+    - button
+    - light
+    - lock
+    - scale
+    - wearable
+    - speaker
+    - other
+  initial: presence
+  icon: mdi:devices
+```
+
+### For input_number.yaml:
+```yaml
+ble_rssi_threshold:
+  name: BLE RSSI Threshold
+  min: -100
+  max: -40
+  step: 1
+  initial: -80
+  unit_of_measurement: dBm
+  icon: mdi:signal
+```
+
+## Option 2: Use Helper UI
+
+You can also create these helpers using the Home Assistant UI:
+1. Go to Configuration → Helpers
+2. Click "Add Helper"
+3. Create each helper with the attributes listed above
+
+After adding the helpers, restart Home Assistant and then restart this add-on.
+EOF
+
+    # Create notice
+    bashio::log.warning "========================================================"
+    bashio::log.warning "BLE Discovery add-on requires specific input helpers."
+    bashio::log.warning "Setup instructions have been saved to:"
+    bashio::log.warning "$INSTRUCTION_FILE"
+    bashio::log.warning "Please follow these instructions, then restart the add-on."
+    bashio::log.warning "========================================================"
+    
+    # Also create a persistent notification
+    curl -s -X POST \
+         -H "Authorization: Bearer ${SUPERVISOR_TOKEN}" \
+         -H "Content-Type: application/json" \
+         -d '{"message": "BLE Discovery add-on requires configuration. See /config/ble_discovery/setup_instructions.md", "title": "BLE Discovery Setup Required", "notification_id": "ble_discovery_setup"}' \
+         http://supervisor/core/api/services/persistent_notification/create
 fi
 
 # Install scripts if they don't exist

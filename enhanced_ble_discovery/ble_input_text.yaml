@@ -1,3 +1,7 @@
+# BLE Device Discovery Input Helpers
+# NOTE: You may need to include this file manually in your configuration.yaml
+# or copy the sections to your existing input helpers config
+
 input_text:
   discovered_ble_devices:
     name: Discovered BLE Devices
@@ -23,11 +27,16 @@ input_text:
     max: 255
     icon: mdi:pencil
 
+# These must be in their own sections in configuration.yaml
+# If you see errors, make sure each section below is properly included
+
+# Add to your input_button section
 input_button:
   bluetooth_scan:
     name: Bluetooth Scan
     icon: mdi:bluetooth-search
 
+# Add to your input_select section
 input_select:
   ble_device_type:
     name: BLE Device Type
@@ -47,6 +56,7 @@ input_select:
     initial: presence
     icon: mdi:devices
     
+# Add to your input_number section
 input_number:
   ble_rssi_threshold:
     name: BLE RSSI Threshold
