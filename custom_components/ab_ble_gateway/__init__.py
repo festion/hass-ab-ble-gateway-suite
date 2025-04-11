@@ -57,8 +57,27 @@ class AbBleScanner(BaseHaRemoteScanner):
     def async_on_mqtt_message(self, msg: ReceiveMessage) -> None:
         """Call the registered callback."""
         try:
-            # Use strict=False to handle any extra data in the msgpack payload
-            unpacked_data = msgpack.unpackb(msg.payload, raw=True, strict=False)
+            # Try to unpack the data, using a more resilient approach
+            try:
+                unpacked_data = msgpack.unpackb(msg.payload, raw=True)
+            except Exception as unpack_err:
+                # If unpacking fails, try to handle extra data by trimming the payload
+                # This is a simple workaround for the "extra data" issue
+                if "extra data" in str(unpack_err):
+                    # Try a simple approach - use a slightly shorter payload
+                    # This may need to be adjusted based on the specific issue
+                    try:
+                        # Truncate the payload slightly to avoid the extra data issue
+                        # This is a heuristic and may not work in all cases
+                        truncated_length = max(1, len(msg.payload) - 2)
+                        unpacked_data = msgpack.unpackb(msg.payload[:truncated_length], raw=True)
+                    except Exception:
+                        # If that fails, just log the error and return
+                        _LOGGER.error(f"Failed to handle msgpack with extra data: {unpack_err}")
+                        return
+                else:
+                    # Re-raise if it's not an "extra data" error
+                    raise unpack_err
             
             if b'devices' not in unpacked_data:
                 _LOGGER.warning("Received MQTT message without 'devices' key")
