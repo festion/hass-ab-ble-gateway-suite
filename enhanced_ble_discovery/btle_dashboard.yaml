@@ -1,0 +1,141 @@
+title: BLE Device Discovery
+path: ble-discovery
+icon: mdi:bluetooth-search
+panel: true
+cards:
+  - type: vertical-stack
+    cards:
+      # Header
+      - type: markdown
+        content: >
+          # BLE Device Discovery Dashboard
+          
+          Use this dashboard to discover and manage Bluetooth Low Energy devices.
+        
+      # Tabs  
+      - type: custom:layout-card
+        layout_type: custom:grid-layout
+        layout:
+          grid-template-columns: 1fr
+          grid-template-rows: auto
+          grid-template-areas: |
+            "tabs"
+            "content"
+        cards:
+          # Tab selector
+          - type: custom:mushroom-chips-card
+            chips:
+              - type: template
+                icon: mdi:bluetooth-search
+                name: Discovery
+                tap_action:
+                  action: fire-dom-event
+                  browser_mod:
+                    service: browser_mod.toast
+                    data:
+                      message: Showing Discovery tab
+                  
+              - type: template
+                icon: mdi:format-list-bulleted
+                name: Managed Devices
+                tap_action:
+                  action: fire-dom-event
+                  browser_mod:
+                    service: browser_mod.toast
+                    data:
+                      message: Showing Managed Devices tab
+            alignment: center
+            grid-area: tabs
+            
+          # Main content
+          - type: custom:mushroom-template-card
+            primary: Active tab content
+            secondary: Content will be displayed here
+            icon: mdi:bluetooth
+            grid-area: content
+            
+      # Discovery tab content
+      - type: entities
+        title: Device Discovery
+        entities:
+          - type: conditional
+            conditions:
+              - entity: input_button.bluetooth_scan
+                state_not: "unavailable"
+            row:
+              entity: input_button.bluetooth_scan
+              name: Scan for BLE Devices
+              icon: mdi:bluetooth-search
+          - type: conditional
+            conditions:
+              - entity: button.bluetooth_scan
+                state_not: "unavailable"
+              - entity: input_button.bluetooth_scan
+                state: "unavailable"
+            row:
+              entity: button.bluetooth_scan
+              name: Scan for BLE Devices
+              icon: mdi:bluetooth-search
+          - type: conditional
+            conditions:
+              - entity: script.bluetooth_scan
+                state_not: "unavailable"
+              - entity: button.bluetooth_scan
+                state: "unavailable"
+              - entity: input_button.bluetooth_scan
+                state: "unavailable"
+            row:
+              entity: script.bluetooth_scan
+              name: Scan for BLE Devices
+              icon: mdi:bluetooth-search
+          - entity: input_text.discovered_ble_devices
+            name: Discovered Devices (JSON)
+          - type: divider
+          - type: section
+            label: Selected Device
+          - entity: input_text.selected_ble_device
+            name: Selected Device MAC
+          - entity: input_text.ble_device_name
+            name: Device Name
+          - entity: input_select.ble_device_type
+            name: Device Type
+          - entity: input_number.ble_rssi_threshold
+            name: RSSI Threshold
+          - entity: input_text.ble_device_icon
+            name: Icon (MDI name)
+          - type: button
+            name: Add Selected Device
+            icon: mdi:plus-circle
+            tap_action:
+              action: call-service
+              service: script.add_ble_device
+              service_data:
+                device_name: "{{ states('input_text.ble_device_name') }}"
+                mac_address: "{{ states('input_text.selected_ble_device') }}"
+                device_type: "{{ states('input_select.ble_device_type') }}"
+                rssi_threshold: "{{ states('input_number.ble_rssi_threshold') | int }}"
+                icon: "{{ states('input_text.ble_device_icon') }}"
+          - type: button
+            name: Run Signal Test
+            icon: mdi:signal
+            tap_action:
+              action: call-service
+              service: script.test_ble_signal
+              service_data:
+                mac_address: "{{ states('input_text.selected_ble_device') }}"
+                test_duration: 30
+      
+      # Managed devices tab content (shown when that tab is selected)
+      - type: entities
+        title: Managed BLE Devices
+        entities:
+          - entity: sensor.ble_gateway_raw_data
+            name: BLE Gateway Status
+          - type: conditional
+            conditions:
+              - entity: input_text.discovered_ble_devices
+                state_not: "{}"
+            row:
+              entity: script.scan_and_display_ble_devices
+              name: Refresh Device List
+              icon: mdi:refresh

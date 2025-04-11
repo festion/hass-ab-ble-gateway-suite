@@ -1,0 +1,27 @@
+{
+    "name": "Enhanced BLE Device Discovery",
+    "version": "1.4.0",
+    "slug": "enhanced_ble_device_discovery",
+    "description": "Discover and manage Bluetooth Low Energy devices with a user-friendly dashboard",
+    "url": "https://github.com/festion/hass-ab-ble-gateway-suite/tree/main/addon/enhanced_ble_discovery",
+    "arch": ["armhf", "armv7", "aarch64", "amd64", "i386"],
+    "startup": "application",
+    "boot": "auto",
+    "init": false,
+    "options": {
+        "log_level": "info",
+        "scan_interval": 60,
+        "gateway_topic": "BTLE"
+    },
+    "schema": {
+        "log_level": "list(trace|debug|info|warning|error|fatal)",
+        "scan_interval": "int(10,3600)",
+        "gateway_topic": "str"
+    },
+    "map": ["config:rw"],
+    "hassio_api": true,
+    "hassio_role": "admin",
+    "homeassistant_api": true,
+    "panel_icon": "mdi:bluetooth-search",
+    "panel_title": "BLE Discovery"
+}

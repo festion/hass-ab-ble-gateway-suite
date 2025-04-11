@@ -1,0 +1,55 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to the device",
+        "data": {
+          "host": "[%key:common::config_flow::data::host%]",
+          "port": "[%key:common::config_flow::data::port%]"
+        }
+      },
+      "auth": {
+        "title": "Authenticate to the device",
+        "data": {
+          "username": "[%key:common::config_flow::data::username%]",
+          "password": "[%key:common::config_flow::data::password%]"
+        }
+      },
+      "finish": {
+        "title": "Choose a name for the device",
+        "data": {
+          "name": "[%key:common::config_flow::data::name%]"
+        }
+      },
+      "confirm": {
+        "title": "Confirm adding {name}",
+        "description": "You are about to add `{name}` ({description}) at `{host}` to Home Assistant.\n\n Please check the following MQTT configuration details",
+        "data": {
+          "mqtt_host": "MQTT Host",
+          "mqtt_port": "MQTT Port",
+          "mqtt_topic": "Publish Topic",
+          "mqtt_id_prefix": "Client ID Prefix",
+          "mqtt_user": "Username",
+          "mqtt_password": "Password"
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "[%key:common::config_flow::abort::already_configured_device%]",
+      "already_in_progress": "[%key:common::config_flow::abort::already_in_progress%]",
+      "cannot_connect": "[%key:common::config_flow::error::cannot_connect%]",
+      "invalid_host": "[%key:common::config_flow::error::invalid_host%]",
+      "not_supported": "Device not supported",
+      "unknown": "[%key:common::config_flow::error::unknown%]"
+    },
+    "error": {
+      "cannot_connect": "[%key:common::config_flow::error::cannot_connect%]",
+      "invalid_host": "[%key:common::config_flow::error::invalid_host%]",
+      "unknown": "[%key:common::config_flow::error::unknown%]",
+      "mqtt_not_enabled": "MQTT integration is not enabled in Home Assistant",
+      "gateway_mqtt_not_configured": "Gateway is not configured to use MQTT (must use connection type 3)",
+      "mqtt_broker_mismatch": "Gateway MQTT broker settings don't match Home Assistant MQTT configuration",
+      "mqtt_auth_mismatch": "Gateway MQTT username/password don't match Home Assistant MQTT configuration"
+    }
+  }
+}

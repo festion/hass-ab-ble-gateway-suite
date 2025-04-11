@@ -1,0 +1,6 @@
+{
+  "name": "April Brother BLE Gateway - Enhanced",
+  "domain": "ab_ble_gateway",
+  "render_readme": true,
+  "homeassistant": "2022.8.0"
+}

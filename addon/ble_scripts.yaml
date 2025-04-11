@@ -1,0 +1,303 @@
+# BLE Device Discovery Scripts
+# These scripts will be added to the addon folder and can be copied to scripts.yaml
+
+# Enhanced Bluetooth Scan with Device Display
+scan_and_display_ble_devices:
+  alias: Scan and Display BLE Devices
+  description: Scan for BLE devices and display them in a notification
+  sequence:
+    - service: persistent_notification.create
+      data:
+        title: "Bluetooth Scan"
+        message: "Starting Bluetooth scan..."
+        notification_id: "ble_scan"
+    
+    # Perform the BLE scan
+    - service: button.press
+      target:
+        entity_id: button.bluetooth_scan
+    
+    # Wait for scan to complete
+    - delay: 
+        seconds: 5
+    
+    # Process scan results
+    - variables:
+        gateway_data: "{{ state_attr('sensor.ble_gateway_raw_data', 'devices') }}"
+        devices_list: >
+          {% if gateway_data is not none %}
+            {% set devices = [] %}
+            {% for device in gateway_data %}
+              {% if device|length >= 3 and device[1]|string|trim != '' and device[2]|string|trim != '' %}
+                {% set device_info = {
+                  'mac': device[1],
+                  'rssi': device[2]|int(-100),
+                  'adv_data': device[3] if device|length > 3 and device[3]|string|trim != '' else 'None'
+                } %}
+                {% set devices = devices + [device_info] %}
+              {% endif %}
+            {% endfor %}
+            {% set sorted_devices = devices|sort(attribute='rssi')|reverse %}
+            {{ sorted_devices }}
+          {% else %}
+            []
+          {% endif %}
+    
+    # Create a list of discovered devices in the input_text entity
+    - service: input_text.set_value
+      data:
+        value: >
+          {% if devices_list|length > 0 %}
+            {% set device_data = {} %}
+            {% for device in devices_list %}
+              {% set device_data = device_data.update({device.mac: device.rssi}) or device_data %}
+            {% endfor %}
+            {{ device_data|tojson }}
+          {% else %}
+            {}
+          {% endif %}
+      target:
+        entity_id: input_text.discovered_ble_devices
+    
+    # Display results
+    - service: persistent_notification.create
+      data:
+        title: "Discovered BLE Devices"
+        message: >
+          {% if devices_list|length > 0 %}
+            Found {{ devices_list|length }} devices:
+            
+            {% for device in devices_list %}
+            **Device {{ loop.index }}**:
+            - MAC: {{ device.mac }}
+            - RSSI: {{ device.rssi }} dBm
+            {% endfor %}
+            
+            To add a device, select it in the BLE Dashboard.
+          {% else %}
+            No BLE devices detected.
+          {% endif %}
+        notification_id: "ble_scan_results"
+
+# BLE Device Signal Test
+test_ble_signal:
+  alias: Test BLE Device Signal
+  description: Test BLE device signal strength over time
+  fields:
+    mac_address:
+      description: MAC address of device to test
+      example: "AA:BB:CC:DD:EE:FF"
+    test_duration:
+      description: Test duration in seconds
+      example: 30
+  sequence:
+    # Format MAC address
+    - variables:
+        formatted_mac: >-
+          {{ mac_address | replace(':', '') | replace('-', '') | upper }}
+        readings: []
+        duration: "{{ test_duration|int(30) }}"
+    
+    # Start notification
+    - service: persistent_notification.create
+      data:
+        title: "BLE Signal Test"
+        message: "Starting signal test for {{ formatted_mac }} for {{ duration }} seconds..."
+        notification_id: "ble_signal_test"
+    
+    # Take multiple readings
+    - repeat:
+        count: "{{ (duration / 5)|int(6) }}"
+        sequence:
+          - service: button.press
+            target:
+              entity_id: button.bluetooth_scan
+          
+          - delay:
+              seconds: 2
+          
+          - variables:
+              gateway_data: "{{ state_attr('sensor.ble_gateway_raw_data', 'devices') }}"
+              current_rssi: >
+                {% if gateway_data is not none %}
+                  {% for device in gateway_data %}
+                    {% if device|length > 2 and device[1] == formatted_mac %}
+                      {{ device[2]|int(-100) }}
+                      {% break %}
+                    {% endif %}
+                  {% endfor %}
+                {% else %}
+                  -100
+                {% endif %}
+              readings: >
+                {{ readings + [current_rssi] }}
+              
+          - delay:
+              seconds: 3
+    
+    # Calculate results
+    - variables:
+        average_rssi: >
+          {% if readings|length > 0 %}
+            {{ (readings|sum / readings|length)|round(1) }}
+          {% else %}
+            -100
+          {% endif %}
+        min_rssi: >
+          {% if readings|length > 0 %}
+            {{ readings|min }}
+          {% else %}
+            -100
+          {% endif %}
+        max_rssi: >
+          {% if readings|length > 0 %}
+            {{ readings|max }}
+          {% else %}
+            -100
+          {% endif %}
+        detected_count: >
+          {% set count = 0 %}
+          {% for reading in readings %}
+            {% if reading > -100 %}
+              {% set count = count + 1 %}
+            {% endif %}
+          {% endfor %}
+          {{ count }}
+    
+    # Display results
+    - service: persistent_notification.create
+      data:
+        title: "BLE Signal Test Results"
+        message: >
+          Signal test for {{ formatted_mac }} complete:
+          
+          - Test duration: {{ duration }} seconds
+          - Samples taken: {{ readings|length }}
+          - Detection rate: {{ (detected_count / readings|length * 100)|round }}%
+          - Average RSSI: {{ average_rssi }} dBm
+          - Min RSSI: {{ min_rssi }} dBm
+          - Max RSSI: {{ max_rssi }} dBm
+          
+          Recommended threshold: {{ (min_rssi + 5)|round }} dBm
+        notification_id: "ble_signal_test"
+
+# Add BLE Device
+add_ble_device:
+  alias: Add BLE Device
+  description: Add a new BLE device with appropriate sensors based on device type
+  fields:
+    device_name:
+      description: Name of the BLE device
+      example: "Pixel Watch"
+    mac_address:
+      description: MAC address of the BLE device (colon or no separators)
+      example: "AA:BB:CC:DD:EE:FF"
+    device_type:
+      description: Type of device (presence, temperature, other)
+      example: "presence"
+    rssi_threshold:
+      description: RSSI threshold for presence detection
+      example: -80
+    icon:
+      description: Icon for the device
+      example: "mdi:watch"
+  sequence:
+    # Format MAC address - remove colons and convert to uppercase
+    - variables:
+        formatted_mac: >-
+          {{ mac_address | replace(':', '') | replace('-', '') | upper }}
+        safe_name: >-
+          {{ device_name | lower | replace(' ', '_') }}
+        
+    # Validate inputs
+    - condition: template
+      value_template: >-
+        {{ 
+          device_name is defined and device_name|length > 0 and
+          formatted_mac is defined and formatted_mac|regex_match('^[0-9A-F]{12}$') and
+          device_type is defined and device_type in ['presence', 'temperature', 'other'] and
+          rssi_threshold is defined and rssi_threshold|int <= -40 and rssi_threshold|int >= -100 and
+          icon is defined and icon|length > 0
+        }}
+        
+    # Create persistent RSSI threshold input
+    - service: input_number.create
+      data:
+        entity_id: "input_number.{{ safe_name }}_rssi_threshold"
+        min: -100
+        max: -40
+        step: 1
+        initial: "{{ rssi_threshold }}"
+        unit_of_measurement: "dBm"
+        icon: mdi:signal-variant
+        name: "{{ device_name }} RSSI Threshold"
+
+    # Call the shell command to add device to templates.yaml
+    - service: shell_command.add_ble_device
+      data:
+        device_name: "{{ device_name }}"
+        mac_address: "{{ formatted_mac }}"
+        device_type: "{{ device_type }}"
+        rssi_threshold: "{{ rssi_threshold }}"
+        icon: "{{ icon }}"
+    
+    # Notify user
+    - service: persistent_notification.create
+      data:
+        title: "BLE Device Added"
+        message: >
+          Added {{ device_name }} ({{ formatted_mac }}) as a {{ device_type }} device.
+          Restarting Home Assistant to apply changes...
+    
+    - delay:
+        seconds: 5
+        
+    - service: homeassistant.restart
+
+# Device Selected Handler
+ble_device_selected:
+  alias: BLE Device Selected Handler
+  description: Handle when a device is selected from the discovery list
+  sequence:
+    - variables:
+        selected_mac: "{{ states('input_text.selected_ble_device') }}"
+        device_json: "{{ states('input_text.discovered_ble_devices') }}"
+        devices: "{{ device_json | from_json }}"
+        current_rssi: >
+          {% if devices is mapping and selected_mac in devices %}
+            {{ devices[selected_mac] }}
+          {% else %}
+            -80
+          {% endif %}
+        recommended_threshold: >
+          {% if devices is mapping and selected_mac in devices %}
+            {{ [devices[selected_mac]|int + 5, -40]|min }}
+          {% else %}
+            -80
+          {% endif %}
+    
+    # Set a default device name if not already set
+    - condition: template
+      value_template: "{{ states('input_text.ble_device_name') == '' }}"
+    - service: input_text.set_value
+      data:
+        entity_id: input_text.ble_device_name
+        value: "BLE {{ selected_mac[-6:] | upper }}"
+    
+    # Set the recommended threshold
+    - service: input_number.set_value
+      data:
+        entity_id: input_number.ble_rssi_threshold
+        value: "{{ recommended_threshold }}"
+    
+    # Notify the user
+    - service: persistent_notification.create
+      data:
+        title: "BLE Device Selected"
+        message: >
+          Selected device: {{ selected_mac }}
+          Current RSSI: {{ current_rssi }} dBm
+          Recommended threshold: {{ recommended_threshold }} dBm
+          
+          Configure the device settings and click "Add Selected Device" when ready.
+        notification_id: "ble_device_selected"

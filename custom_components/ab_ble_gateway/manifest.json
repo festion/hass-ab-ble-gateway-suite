@@ -1,0 +1,27 @@
+{
+  "domain": "ab_ble_gateway",
+  "name": "April Brother BLE Gateway - Enhanced",
+  "codeowners": [
+    "@festion",
+    "@chkuendig"
+  ],
+  "config_flow": true,
+  "dependencies": [
+    "bluetooth",
+    "mqtt"
+  ],
+  "documentation": "https://github.com/festion/hass-ab-ble-gateway-suite",
+  "homekit": {},
+  "iot_class": "local_push",
+  "issue_tracker": "https://github.com/festion/hass-ab-ble-gateway-suite/issues",
+  "loggers": [
+    "ab_ble_gateway"
+  ],
+  "requirements": [
+    "msgpack==1.0.4"
+  ],
+  "version": "0.2.2",
+  "zeroconf": [
+    "_xbg._tcp.local."
+  ]
+}

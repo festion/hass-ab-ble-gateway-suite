@@ -1,0 +1,11 @@
+clean_failed_entries:
+  name: Clean Failed Entries
+  description: Remove failed AB BLE Gateway entries from configuration
+  fields:
+    dry_run:
+      name: Dry Run
+      description: Perform a dry run without making changes
+      required: false
+      default: false
+      selector:
+        boolean: {}

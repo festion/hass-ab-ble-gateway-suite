@@ -1,0 +1,58 @@
+input_text:
+  discovered_ble_devices:
+    name: Discovered BLE Devices
+    initial: '{}'
+    max: 1024
+    icon: mdi:bluetooth-transfer
+  
+  selected_ble_device:
+    name: Selected BLE Device
+    initial: ''
+    max: 255
+    icon: mdi:bluetooth
+    
+  ble_device_name:
+    name: BLE Device Name
+    initial: ''
+    max: 255
+    icon: mdi:rename
+    
+  ble_device_icon:
+    name: BLE Device Icon
+    initial: 'mdi:bluetooth'
+    max: 255
+    icon: mdi:pencil
+
+input_button:
+  bluetooth_scan:
+    name: Bluetooth Scan
+    icon: mdi:bluetooth-search
+
+input_select:
+  ble_device_type:
+    name: BLE Device Type
+    options:
+      - presence
+      - temperature
+      - humidity
+      - motion
+      - contact
+      - button
+      - light
+      - lock
+      - scale
+      - wearable
+      - speaker
+      - other
+    initial: presence
+    icon: mdi:devices
+    
+input_number:
+  ble_rssi_threshold:
+    name: BLE RSSI Threshold
+    min: -100
+    max: -40
+    step: 1
+    initial: -80
+    unit_of_measurement: dBm
+    icon: mdi:signal
