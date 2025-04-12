@@ -20,7 +20,7 @@
   "requirements": [
     "msgpack==1.0.4"
   ],
-  "version": "0.3.3",
+  "version": "0.3.4",
   "zeroconf": [
     "_xbg._tcp.local."
   ]

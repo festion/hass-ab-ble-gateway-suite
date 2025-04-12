@@ -414,23 +414,10 @@ class AbBleScanner(BaseHaRemoteScanner):
                         current_time = MONOTONIC_TIME()
                         
                         _LOGGER.debug(f"Calling _async_on_advertisement for device {address}")
-                        # Try alternate call format based on error
+                        # Based on the error messages, it appears there might be a type issue
+                        # with the timestamp format (list vs. float)
                         try:
-                            # First try the new format with all arguments
-                            self._async_on_advertisement(
-                                address,
-                                rssi,
-                                local_name,
-                                service_uuids,
-                                service_data,
-                                manufacturer_data,
-                                None,  # tx_power
-                                {},    # details parameter (empty dict)
-                                [current_time]  # advertisement_monotonic_time as list with one timestamp
-                            )
-                        except TypeError as type_err:
-                            # If that fails, try older format without the timestamp
-                            _LOGGER.debug(f"Trying older advertisement call format: {type_err}")
+                            # First try with just 7 arguments (older API)
                             self._async_on_advertisement(
                                 address,
                                 rssi,
@@ -440,6 +427,53 @@ class AbBleScanner(BaseHaRemoteScanner):
                                 manufacturer_data,
                                 None  # tx_power
                             )
+                            _LOGGER.debug("Successfully used older 7-argument format")
+                        except TypeError as type_err:
+                            _LOGGER.debug(f"Older format failed, trying with 8 arguments: {type_err}")
+                            try:
+                                # Then try with 8 arguments (middle API)
+                                self._async_on_advertisement(
+                                    address,
+                                    rssi,
+                                    local_name,
+                                    service_uuids,
+                                    service_data,
+                                    manufacturer_data,
+                                    None,  # tx_power
+                                    {}     # details parameter
+                                )
+                                _LOGGER.debug("Successfully used 8-argument format")
+                            except TypeError as type_err2:
+                                _LOGGER.debug(f"8-argument format failed, trying with 9 arguments and direct timestamp: {type_err2}")
+                                try:
+                                    # Finally try with 9 arguments, but using the timestamp directly
+                                    self._async_on_advertisement(
+                                        address,
+                                        rssi,
+                                        local_name,
+                                        service_uuids,
+                                        service_data,
+                                        manufacturer_data,
+                                        None,        # tx_power
+                                        {},          # details parameter
+                                        current_time # timestamp as direct float value, not in a list
+                                    )
+                                    _LOGGER.debug("Successfully used 9-argument format with direct timestamp")
+                                except TypeError as type_err3:
+                                    # As a last resort, try with the list format
+                                    _LOGGER.debug(f"Direct timestamp failed, using list format: {type_err3}")
+                                    self._async_on_advertisement(
+                                        address,
+                                        rssi,
+                                        local_name,
+                                        service_uuids,
+                                        service_data,
+                                        manufacturer_data,
+                                        None,         # tx_power
+                                        {},           # details parameter
+                                        [current_time] # timestamp as list
+                                    )
+                                    _LOGGER.debug("Successfully used 9-argument format with list timestamp")
                         # Success - increment processed count
                         processed_count += 1
                         _LOGGER.debug(f"Successfully processed advertisement for {address}")

@@ -80,6 +80,7 @@ Claude should help users with the following tasks related to this Home Assistant
    - Fixed syntax error in _async_on_advertisement call (v0.3.1)
    - Changed keyword arguments to positional arguments in _async_on_advertisement call (v0.3.2)
    - Added fallback to older API format for _async_on_advertisement (v0.3.3)
+   - Implemented comprehensive multi-format support with progressive fallbacks for timestamps (v0.3.4)
 
 2. **"Extracted data is not a dictionary: <class 'int'>" Error**
    - Added better error handling in MQTT message processing
