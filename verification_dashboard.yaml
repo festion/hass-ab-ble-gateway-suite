@@ -32,9 +32,13 @@ views:
         title: Gateway Attributes
         content: |
           ```yaml
-          {% for attr, value in state_attr('sensor.ble_gateway_raw_data') | default({}) | dictsort %}
-          {{ attr }}: {{ value }}
-          {% endfor %}
+          {% if state_attr('sensor.ble_gateway_raw_data', 'ip') is not none %}IP: {{ state_attr('sensor.ble_gateway_raw_data', 'ip') }}{% endif %}
+          {% if state_attr('sensor.ble_gateway_raw_data', 'mac') is not none %}MAC: {{ state_attr('sensor.ble_gateway_raw_data', 'mac') }}{% endif %}
+          {% if state_attr('sensor.ble_gateway_raw_data', 'gateway_id') is not none %}Gateway ID: {{ state_attr('sensor.ble_gateway_raw_data', 'gateway_id') }}{% endif %}
+          {% if state_attr('sensor.ble_gateway_raw_data', 'gateway_status') is not none %}Status: {{ state_attr('sensor.ble_gateway_raw_data', 'gateway_status') }}{% endif %}
+          {% if state_attr('sensor.ble_gateway_raw_data', 'last_scan') is not none %}Last Scan: {{ state_attr('sensor.ble_gateway_raw_data', 'last_scan') }}{% endif %}
+          {% if state_attr('sensor.ble_gateway_raw_data', 'location') is not none %}Location: {{ state_attr('sensor.ble_gateway_raw_data', 'location') }}{% endif %}
+          {% if state_attr('sensor.ble_gateway_raw_data', 'rssi') is not none %}RSSI: {{ state_attr('sensor.ble_gateway_raw_data', 'rssi') }}{% endif %}
           ```
       
       - type: button
