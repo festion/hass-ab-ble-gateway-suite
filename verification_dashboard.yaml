@@ -23,23 +23,35 @@ views:
       
       - type: markdown
         title: Raw MQTT Payload
-        content: |
+        content: |-
           ```json
           {{ states('sensor.ble_gateway_raw_data') }}
           ```
       
-      - type: markdown
+      - type: entities
         title: Gateway Attributes
-        content: |
-          ```yaml
-          {% if state_attr('sensor.ble_gateway_raw_data', 'ip') is not none %}IP: {{ state_attr('sensor.ble_gateway_raw_data', 'ip') }}{% endif %}
-          {% if state_attr('sensor.ble_gateway_raw_data', 'mac') is not none %}MAC: {{ state_attr('sensor.ble_gateway_raw_data', 'mac') }}{% endif %}
-          {% if state_attr('sensor.ble_gateway_raw_data', 'gateway_id') is not none %}Gateway ID: {{ state_attr('sensor.ble_gateway_raw_data', 'gateway_id') }}{% endif %}
-          {% if state_attr('sensor.ble_gateway_raw_data', 'gateway_status') is not none %}Status: {{ state_attr('sensor.ble_gateway_raw_data', 'gateway_status') }}{% endif %}
-          {% if state_attr('sensor.ble_gateway_raw_data', 'last_scan') is not none %}Last Scan: {{ state_attr('sensor.ble_gateway_raw_data', 'last_scan') }}{% endif %}
-          {% if state_attr('sensor.ble_gateway_raw_data', 'location') is not none %}Location: {{ state_attr('sensor.ble_gateway_raw_data', 'location') }}{% endif %}
-          {% if state_attr('sensor.ble_gateway_raw_data', 'rssi') is not none %}RSSI: {{ state_attr('sensor.ble_gateway_raw_data', 'rssi') }}{% endif %}
-          ```
+        entities:
+          - attribute: ip
+            entity: sensor.ble_gateway_raw_data
+            name: IP Address
+          - attribute: mac
+            entity: sensor.ble_gateway_raw_data
+            name: MAC Address
+          - attribute: gateway_id
+            entity: sensor.ble_gateway_raw_data
+            name: Gateway ID
+          - attribute: gateway_status
+            entity: sensor.ble_gateway_raw_data
+            name: Gateway Status
+          - attribute: last_scan
+            entity: sensor.ble_gateway_raw_data
+            name: Last Scan
+          - attribute: location
+            entity: sensor.ble_gateway_raw_data
+            name: Location
+          - attribute: rssi
+            entity: sensor.ble_gateway_raw_data
+            name: RSSI
       
       - type: button
         tap_action:
