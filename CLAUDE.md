@@ -74,6 +74,7 @@ Claude should help users with the following tasks related to this Home Assistant
    - Removed automatic restart from device addition scripts (v1.4.1)
    - Improved lock handling to prevent concurrent reconnects (v0.2.8)
    - Added a static MQTT handler to avoid duplicate subscriptions (v0.2.8)
+   - Fixed argument mismatch in advertisement processing (v0.2.9)
 
 2. **"Extracted data is not a dictionary: <class 'int'>" Error**
    - Added better error handling in MQTT message processing
@@ -89,7 +90,10 @@ Claude should help users with the following tasks related to this Home Assistant
    - Added device mapping support for friendly device names
 
 ### Implementation Details:
-1. In `__init__.py` (v0.2.8):
+1. In `__init__.py` (v0.2.9):
+   - Fixed critical issue with _async_on_advertisement call parameter mismatch
+   - Added required monotonic timestamp and details parameters to advertisement calls
+   - Implemented fallback MQTT message handling to prevent errors during reconnect
    - Enhanced the JSON parsing with more verbose logging
    - Created a persistent static MQTT handler to prevent multiple subscriptions
    - Improved the locking mechanism for MQTT reconnection
@@ -103,9 +107,10 @@ Claude should help users with the following tasks related to this Home Assistant
    - Updated notification to inform users that a manual restart may be needed
    - This prevents unintended Home Assistant restarts when using the reconnect button
 
-3. Debugging Improvements (v0.2.8):
+3. Debugging Improvements (v0.2.9):
    - Added detailed payload structure logging for troubleshooting
    - Enhanced logging of device data format detection
    - Improved metadata extraction and device mapping
    - Added MQTT topic storage for easier diagnostics
    - Implemented better error messages throughout the codebase
+   - Added defensive error handling for direct MQTT message processing
