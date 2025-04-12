@@ -14,15 +14,27 @@ views:
           - entity: sensor.ble_gateway_raw_data
           - entity: button.bluetooth_scan
       
-      - type: markdown
-        content: |-
-          ## All Gateway Attributes
-          
-          ```yaml
-          {% for attr, value in states.sensor.ble_gateway_raw_data.attributes.items() %}
-          {{ attr }}: {{ value }}
-          {% endfor %}
-          ```
+      - type: entities
+        title: "Gateway Attributes"
+        entities:
+          - attribute: gateway_id
+            entity: sensor.ble_gateway_raw_data
+            name: Gateway ID
+          - attribute: gateway_status
+            entity: sensor.ble_gateway_raw_data
+            name: Status
+          - attribute: ip
+            entity: sensor.ble_gateway_raw_data
+            name: IP Address
+          - attribute: mac
+            entity: sensor.ble_gateway_raw_data
+            name: MAC Address
+          - attribute: location
+            entity: sensor.ble_gateway_raw_data
+            name: Location
+          - attribute: last_scan
+            entity: sensor.ble_gateway_raw_data
+            name: Last Scan
           
       - type: markdown
         content: |-
