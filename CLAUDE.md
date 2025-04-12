@@ -79,6 +79,7 @@ Claude should help users with the following tasks related to this Home Assistant
    - Implemented global reconnect state tracking to prevent concurrent reconnects (v0.3.0)
    - Fixed syntax error in _async_on_advertisement call (v0.3.1)
    - Changed keyword arguments to positional arguments in _async_on_advertisement call (v0.3.2)
+   - Added fallback to older API format for _async_on_advertisement (v0.3.3)
 
 2. **"Extracted data is not a dictionary: <class 'int'>" Error**
    - Added better error handling in MQTT message processing

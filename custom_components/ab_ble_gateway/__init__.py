@@ -414,17 +414,32 @@ class AbBleScanner(BaseHaRemoteScanner):
                         current_time = MONOTONIC_TIME()
                         
                         _LOGGER.debug(f"Calling _async_on_advertisement for device {address}")
-                        self._async_on_advertisement(
-                            address,
-                            rssi,
-                            local_name,
-                            service_uuids,
-                            service_data,
-                            manufacturer_data,
-                            None,  # tx_power
-                            {},  # details parameter (empty dict)
-                            [current_time]  # advertisement_monotonic_time as list with one timestamp
-                        )
+                        # Try alternate call format based on error
+                        try:
+                            # First try the new format with all arguments
+                            self._async_on_advertisement(
+                                address,
+                                rssi,
+                                local_name,
+                                service_uuids,
+                                service_data,
+                                manufacturer_data,
+                                None,  # tx_power
+                                {},    # details parameter (empty dict)
+                                [current_time]  # advertisement_monotonic_time as list with one timestamp
+                            )
+                        except TypeError as type_err:
+                            # If that fails, try older format without the timestamp
+                            _LOGGER.debug(f"Trying older advertisement call format: {type_err}")
+                            self._async_on_advertisement(
+                                address,
+                                rssi,
+                                local_name,
+                                service_uuids,
+                                service_data,
+                                manufacturer_data,
+                                None  # tx_power
+                            )
                         # Success - increment processed count
                         processed_count += 1
                         _LOGGER.debug(f"Successfully processed advertisement for {address}")
