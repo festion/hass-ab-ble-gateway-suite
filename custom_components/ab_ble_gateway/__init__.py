@@ -422,8 +422,8 @@ class AbBleScanner(BaseHaRemoteScanner):
                             service_data=service_data,
                             manufacturer_data=manufacturer_data,
                             tx_power=None,
-                            {},  # details parameter (empty dict)
-                            [current_time]  # advertisement_monotonic_time as list with one timestamp
+                            details={},  # details parameter (empty dict)
+                            advertisement_monotonic_time=[current_time]  # advertisement time as list with one timestamp
                         )
                         # Success - increment processed count
                         processed_count += 1
