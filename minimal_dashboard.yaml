@@ -1,0 +1,33 @@
+title: "BLE Raw Data"
+views:
+  - path: default_view
+    title: "BLE Raw Data"
+    badges: []
+    cards:
+      - type: entities
+        title: "BLE Gateway Info"
+        entities:
+          - entity: sensor.ble_gateway_raw_data
+            name: "Gateway Status"
+      
+      - type: markdown
+        content: |-
+          ## Device Data
+          ```yaml
+          {{ state_attr('sensor.ble_gateway_raw_data', 'devices') | tojson }}
+          ```
+          
+      - type: markdown
+        content: |-
+          ## Device Map
+          ```yaml
+          {{ state_attr('sensor.ble_gateway_raw_data', 'device_map') | tojson }}
+          ```
+      
+      - type: entities
+        title: "Gateway Actions"
+        show_header_toggle: false
+        entities:
+          - entity: button.bluetooth_scan
+            name: "Scan for Devices"
+            icon: mdi:bluetooth-search
