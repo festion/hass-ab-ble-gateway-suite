@@ -62,3 +62,35 @@ Claude should help users with the following tasks related to this Home Assistant
 - Error handling: Use try/except blocks with specific exceptions, log errors
 - Naming: snake_case for variables/functions, PascalCase for classes
 - String formatting: Use f-strings
+
+## Current Improvements (2024-04-12)
+
+### Fixed Issues:
+1. **Home Assistant Restart on Gateway Reconnect**
+   - Fixed the MQTT reconnect service that was causing Home Assistant to restart
+   - Implemented improved error handling for MQTT message processing
+   - Added safe wrapper for scanner MQTT handlers
+   - Added empty message payload check to prevent processing errors
+   - Removed automatic restart from device addition scripts (v1.4.1)
+
+2. **"Extracted data is not a dictionary: <class 'int'>" Error**
+   - Added better error handling in MQTT message processing
+   - MQTT messages with integer payloads now handled gracefully
+   - Added additional defensive coding in the message handler
+
+### Implementation Details:
+1. In `__init__.py`:
+   - Created a `safe_mqtt_handler` wrapper for scanner MQTT handlers
+   - Added proper error catching for the message handler
+   - Implemented a debug handler as fallback when no scanner is found
+   - Added check for empty payloads to skip processing
+
+2. In `ble_scripts.yaml` (v1.4.1):
+   - Removed the automatic `homeassistant.restart` service call from the `add_ble_device` script
+   - Updated notification to inform users that a manual restart may be needed
+   - This prevents unintended Home Assistant restarts when using the reconnect button
+
+3. Next steps may include:
+   - Testing MQTT reconnection with the new handlers
+   - Reviewing other potential error sources in message processing
+   - Adding more detailed documentation for diagnostic purposes

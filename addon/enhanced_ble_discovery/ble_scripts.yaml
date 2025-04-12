@@ -247,12 +247,10 @@ add_ble_device:
         title: "BLE Device Added"
         message: >
           Added {{ device_name }} ({{ formatted_mac }}) as a {{ device_type }} device.
-          Restarting Home Assistant to apply changes...
+          Changes have been applied. A manual restart may be needed for all changes to take effect.
     
     - delay:
         seconds: 5
-        
-    - service: homeassistant.restart
 
 # Device Selected Handler
 ble_device_selected:
