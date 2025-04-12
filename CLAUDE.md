@@ -46,6 +46,27 @@ Claude should help users with the following tasks related to this Home Assistant
 - `addon/Dockerfile`: Container build configuration
 - `addon/run.sh`: Script to run the add-on
 
+### Dashboard Files
+- `btle_combined_dashboard.yaml`: Combined dashboard for BLE device discovery and gateway management
+- `btle_dashboard.yaml`: Dashboard for BLE device discovery
+- `btle_gateway_management.yaml`: Dashboard for BLE gateway management
+
+## Dashboard Installation
+
+To manually install the dashboard:
+
+1. Go to Home Assistant UI
+2. Navigate to Settings > Dashboards
+3. Click "Add Dashboard" then select "From YAML"
+4. Copy the contents from `btle_combined_dashboard.yaml`
+5. Save the dashboard
+
+The combined dashboard includes:
+- Device discovery with scanning functionality
+- Device management interface
+- Gateway status monitoring
+- Gateway management controls (reconnect, logs)
+
 ## Key Concepts
 - AprilBrother BLE Gateway integration
 - BLE device scanning and discovery
@@ -95,6 +116,11 @@ Claude should help users with the following tasks related to this Home Assistant
    - Enhanced metadata extraction from payloads
    - Added device mapping support for friendly device names
 
+4. **Dashboard Missing from Sidebar**
+   - Created combined dashboard YAML file for manual installation
+   - Added documentation on dashboard installation process
+   - Integrated device discovery and gateway management into single dashboard
+
 ### Implementation Details:
 1. In `__init__.py` (v0.3.0):
    - Implemented global reconnect state tracking at domain level
@@ -125,3 +151,10 @@ Claude should help users with the following tasks related to this Home Assistant
    - Added MQTT topic storage for easier diagnostics
    - Implemented better error messages throughout the codebase
    - Added defensive error handling for direct MQTT message processing
+
+4. Dashboard Implementation (v0.3.5):
+   - Created `btle_combined_dashboard.yaml` with integrated functionality
+   - Combined device discovery and gateway management interfaces
+   - Added tab-based navigation using Mushroom cards
+   - Ensured compatibility with different entity availability states
+   - Added conditional display based on entity availability
