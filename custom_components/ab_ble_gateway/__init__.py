@@ -197,6 +197,26 @@ class AbBleScanner(BaseHaRemoteScanner):
                     else:
                         # It's already a list, we're good
                         devices = devices_raw
+                        
+                # Check for additional metadata that might be useful
+                metadata = None
+                device_map = {}
+                
+                # Try to get metadata from JSON payload
+                if 'metadata' in unpacked_data and isinstance(unpacked_data['metadata'], dict):
+                    metadata = unpacked_data['metadata']
+                    _LOGGER.debug(f"Found metadata in payload: {metadata}")
+                    
+                    # Extract device_map if available
+                    if 'device_map' in metadata and isinstance(metadata['device_map'], dict):
+                        device_map = metadata['device_map']
+                        _LOGGER.debug(f"Found device map: {device_map}")
+                
+                # Store metadata as part of domain data for use by services
+                if metadata and hasattr(hass, 'data') and DOMAIN in hass.data:
+                    for entry_id in hass.data[DOMAIN]:
+                        hass.data[DOMAIN][entry_id]['metadata'] = metadata
+                        hass.data[DOMAIN][entry_id]['device_map'] = device_map
             except Exception as devices_err:
                 _LOGGER.warning(f"Error extracting devices data: {devices_err}")
                 # Ensure we have a list
@@ -234,22 +254,89 @@ class AbBleScanner(BaseHaRemoteScanner):
                         
                     # Parse the raw data with error handling
                     try:
-                        raw_data = parse_ap_ble_devices_data(d)
-                        if raw_data is None:
-                            _LOGGER.debug(f"Could not parse device data: {d}")
+                        # Handle various device data formats
+                        
+                        # Check if this is like [0,"D712ED6A66C6",-85,"0201..."] - standard format from the gateway
+                        if isinstance(d, list) and len(d) >= 3 and isinstance(d[1], (str, bytes)) and isinstance(d[2], (int, float, str)):
+                            # Extract basic info
+                            index = d[0] if isinstance(d[0], int) else 0
+                            
+                            # Get MAC address - handle different formats
+                            if isinstance(d[1], str):
+                                # Format MAC if needed (add colons every 2 chars if not present)
+                                if ':' in d[1]:
+                                    mac_address = d[1].upper()
+                                else:
+                                    # Insert colons every 2 characters
+                                    mac_raw = d[1].upper()
+                                    mac_address = ':'.join(mac_raw[i:i+2] for i in range(0, len(mac_raw), 2) if i+2 <= len(mac_raw))
+                            else:
+                                # Convert bytes to string if needed
+                                try:
+                                    mac_raw = d[1].decode('utf-8').upper()
+                                    mac_address = ':'.join(mac_raw[i:i+2] for i in range(0, len(mac_raw), 2) if i+2 <= len(mac_raw))
+                                except:
+                                    _LOGGER.debug(f"Could not decode MAC address: {d[1]}")
+                                    continue
+                            
+                            # Get RSSI - could be int or string
+                            if isinstance(d[2], (int, float)):
+                                rssi = int(d[2])
+                            else:  # Try to convert from string
+                                try:
+                                    rssi = int(d[2])
+                                except:
+                                    _LOGGER.debug(f"Could not parse RSSI as number: {d[2]}")
+                                    rssi = -100  # Default to weak signal
+                            
+                            # Get advertisement data if present
+                            adv_data = d[3] if len(d) > 3 else ""
+                            
+                            # Check for device name in metadata if available
+                            device_name = ""
+                            if hasattr(self, 'hass') and DOMAIN in self.hass.data:
+                                for entry_id in self.hass.data[DOMAIN]:
+                                    if 'device_map' in self.hass.data[DOMAIN][entry_id]:
+                                        device_map = self.hass.data[DOMAIN][entry_id]['device_map']
+                                        # Check with and without colons
+                                        if mac_address in device_map:
+                                            device_name = device_map[mac_address]
+                                        elif mac_address.replace(':', '') in device_map:
+                                            device_name = device_map[mac_address.replace(':', '')]
+                                        break
+                            
+                            # Create direct advertisement data
+                            adv = {
+                                "address": mac_address,
+                                "rssi": rssi,
+                                "service_uuids": [],
+                                "local_name": device_name,
+                                "service_data": {},
+                                "manufacturer_data": {}
+                            }
+                            
+                            # Try to parse adv_data if it looks like a hex string
+                            if isinstance(adv_data, str) and all(c in "0123456789ABCDEFabcdef" for c in adv_data) and len(adv_data) > 8:
+                                _LOGGER.debug(f"Found hex advertisement data: {adv_data}")
+                                # Could parse BLE adv data further here if needed
+                                
+                        # Process as original binary data (legacy support)
+                        elif isinstance(d, (bytes, bytearray)):
+                            raw_data = parse_ap_ble_devices_data(d)
+                            if raw_data is None:
+                                _LOGGER.debug(f"Could not parse device data: {d}")
+                                continue
+                                
+                            # Parse the advertisement with error handling
+                            adv = parse_raw_data(raw_data)
+                            if adv is None:
+                                _LOGGER.debug("Invalid advertisement data")
+                                continue
+                        else:
+                            _LOGGER.debug(f"Unrecognized device data format: {d}")
                             continue
                     except Exception as parse_err:
                         _LOGGER.debug(f"Error parsing device data: {parse_err}")
-                        continue
-                        
-                    # Parse the advertisement with error handling
-                    try:
-                        adv = parse_raw_data(raw_data)
-                        if adv is None:
-                            _LOGGER.debug("Invalid advertisement data")
-                            continue
-                    except Exception as adv_err:
-                        _LOGGER.debug(f"Error parsing advertisement: {adv_err}")
                         continue
                     
                     # Ensure advertisement has all required fields with extremely safe defaults
