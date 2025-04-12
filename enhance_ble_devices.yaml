@@ -1,0 +1,153 @@
+# These input helpers should be added to your Home Assistant configuration
+# Add the following to your configuration.yaml
+
+input_text:
+  discovered_ble_devices:
+    name: Discovered BLE Devices
+    initial: '{}'
+    max: 1024
+    icon: mdi:bluetooth-transfer
+  
+  selected_ble_device:
+    name: Selected BLE Device
+    initial: ''
+    max: 255
+    icon: mdi:bluetooth
+    
+  ble_device_name:
+    name: BLE Device Name
+    initial: ''
+    max: 255
+    icon: mdi:rename
+    
+  ble_device_icon:
+    name: BLE Device Icon
+    initial: 'mdi:bluetooth'
+    max: 255
+    icon: mdi:pencil
+
+input_button:
+  bluetooth_scan:
+    name: Bluetooth Scan
+    icon: mdi:bluetooth-search
+
+input_select:
+  ble_device_type:
+    name: BLE Device Type
+    options:
+      - presence
+      - temperature
+      - humidity
+      - motion
+      - contact
+      - button
+      - light
+      - lock
+      - scale
+      - wearable
+      - speaker
+      - other
+    initial: presence
+    icon: mdi:devices
+    
+input_number:
+  ble_rssi_threshold:
+    name: BLE RSSI Threshold
+    min: -100
+    max: -40
+    step: 1
+    initial: -80
+    unit_of_measurement: dBm
+    icon: mdi:signal
+
+# These automation and scripts should be added to your automations.yaml and scripts.yaml files
+
+automation:
+  - id: update_ble_devices_json
+    alias: "Update BLE Devices JSON"
+    description: "Update the BLE devices JSON when new MQTT messages arrive"
+    trigger:
+      - platform: state
+        entity_id: sensor.ble_gateway_raw_data
+    action:
+      - service: script.update_discovered_ble_devices
+
+script:
+  scan_and_display_ble_devices:
+    alias: Scan and Display BLE Devices
+    description: Scan for BLE devices and display them in a notification
+    sequence:
+      - service: persistent_notification.create
+        data:
+          title: "Bluetooth Scan"
+          message: "Starting Bluetooth scan..."
+          notification_id: "ble_scan"
+      
+      - service: script.update_discovered_ble_devices
+      
+      # Wait for scan to complete
+      - delay: 
+          seconds: 5
+      
+      # Display results
+      - service: persistent_notification.create
+        data:
+          title: "Discovered BLE Devices"
+          message: >
+            {% set device_json = states('input_text.discovered_ble_devices') %}
+            {% set devices = device_json | from_json %}
+            {% if devices|length > 0 %}
+              Found {{ devices|length }} devices:
+              
+              {% for mac, rssi in devices.items() %}
+              **Device {{ loop.index }}**:
+              - MAC: {{ mac }}
+              - RSSI: {{ rssi }} dBm
+              {% endfor %}
+              
+              To add a device, select it in the BLE Dashboard.
+            {% else %}
+              No BLE devices detected.
+            {% endif %}
+          notification_id: "ble_scan_results"
+
+  update_discovered_ble_devices:
+    alias: Update Discovered BLE Devices
+    description: Update the discovered BLE devices input_text entity
+    sequence:
+      - variables:
+          gateway_data: "{{ state_attr('sensor.ble_gateway_raw_data', 'devices') }}"
+          devices_list: >
+            {% if gateway_data is not none %}
+              {% set devices = [] %}
+              {% for device in gateway_data %}
+                {% if device|length >= 3 and device[1]|string|trim != '' and device[2]|string|trim != '' %}
+                  {% set device_info = {
+                    'mac': device[1],
+                    'rssi': device[2]|int(-100),
+                    'adv_data': device[3] if device|length > 3 and device[3]|string|trim != '' else 'None'
+                  } %}
+                  {% set devices = devices + [device_info] %}
+                {% endif %}
+              {% endfor %}
+              {% set sorted_devices = devices|sort(attribute='rssi')|reverse %}
+              {{ sorted_devices }}
+            {% else %}
+              []
+            {% endif %}
+      
+      # Create a list of discovered devices in the input_text entity
+      - service: input_text.set_value
+        data:
+          value: >
+            {% if devices_list|length > 0 %}
+              {% set device_data = {} %}
+              {% for device in devices_list %}
+                {% set device_data = device_data.update({device.mac: device.rssi}) or device_data %}
+              {% endfor %}
+              {{ device_data|tojson }}
+            {% else %}
+              {}
+            {% endif %}
+        target:
+          entity_id: input_text.discovered_ble_devices
