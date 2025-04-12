@@ -1194,7 +1194,7 @@ def collect_system_diagnostics():
     """
     diagnostics = {
         "timestamp": datetime.now().isoformat(),
-        "version": "1.4.0",  # Make sure to update this when changing versions
+        "version": "1.5.2",  # Make sure to update this when changing versions
         "python_version": ".".join(map(str, sys.version_info[:3])),
         "platform": sys.platform,
         "environment": {}
@@ -1320,7 +1320,7 @@ def get_home_assistant_activity_level():
         }
         
         # Get history for the last 15 minutes for common activity entities
-        fifteen_minutes_ago = (datetime.now() - datetime.timedelta(minutes=15)).isoformat()
+        fifteen_minutes_ago = (datetime.now() - timedelta(minutes=15)).isoformat()
         
         # Try to get state changes history
         response = requests.get(
@@ -1433,6 +1433,11 @@ def main(log_level, scan_interval, gateway_topic=DEFAULT_GATEWAY_TOPIC):
             
             # Create a sensor to show current scan settings
             try:
+                headers = {
+                    "Authorization": f"Bearer {os.environ.get('SUPERVISOR_TOKEN', '')}",
+                    "Content-Type": "application/json"
+                }
+                
                 sensor_data = {
                     "state": adaptive_interval,
                     "attributes": {
