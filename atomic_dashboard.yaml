@@ -1,0 +1,40 @@
+title: "BLE Data Viewer"
+views:
+  - path: default_view
+    title: "BLE Data"
+    cards:
+      - type: entities
+        title: "BLE Gateway Status"
+        entities:
+          - entity: sensor.ble_gateway_raw_data
+      
+      - type: entities
+        title: "All Home Assistant Entities"
+        entities:
+          - entity: sensor.ble_gateway_raw_data
+          - entity: button.bluetooth_scan
+      
+      - type: markdown
+        content: |-
+          ## All Gateway Attributes
+          
+          ```yaml
+          {% for attr, value in states.sensor.ble_gateway_raw_data.attributes.items() %}
+          {{ attr }}: {{ value }}
+          {% endfor %}
+          ```
+          
+      - type: markdown
+        content: |-
+          ## MQTT Topics
+          
+          ```
+          xbg - Used by AprilBrother Gateway
+          ```
+          
+      - type: history-graph
+        title: "Gateway Activity"
+        hours_to_show: 24
+        refresh_interval: 0
+        entities:
+          - entity: sensor.ble_gateway_raw_data

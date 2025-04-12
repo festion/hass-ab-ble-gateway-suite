@@ -1,0 +1,26 @@
+title: BLE Data
+views:
+  - title: BLE Data
+    path: default_view
+    badges: []
+    cards:
+      - type: entities
+        title: BLE Gateway Info
+        entities:
+          - entity: sensor.ble_gateway_raw_data
+        state_color: true
+      
+      - type: button
+        tap_action:
+          action: call-service
+          service: ab_ble_gateway.mqtt_reconnect
+          data: {}
+        name: Reconnect MQTT
+        icon: mdi:connection
+        
+      - type: button
+        tap_action:
+          action: navigate
+          navigation_path: /config/logs
+        name: View System Logs
+        icon: mdi:text-box-outline
