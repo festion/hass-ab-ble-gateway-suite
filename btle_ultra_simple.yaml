@@ -1,0 +1,34 @@
+title: BLE Gateway Ultra Simple
+path: ble-ultra-simple
+icon: mdi:bluetooth
+views:
+  - path: default_view
+    title: BLE Devices
+    cards:
+      - type: entities
+        title: BLE Gateway
+        entities:
+          - entity: sensor.ble_gateway_raw_data
+            name: Gateway Status
+      
+      - type: entities
+        title: Actions
+        entities:
+          - type: button
+            name: Reconnect MQTT
+            icon: mdi:connection
+            tap_action:
+              action: call-service
+              service: ab_ble_gateway.mqtt_reconnect
+              target: {}
+              data: {}
+              
+      - type: glance
+        title: Devices from Gateway
+        columns: 2
+        show_name: true
+        state_color: true
+        entities:
+          - entity: sensor.ble_gateway_raw_data
+            name: Rav4 BTLE
+            icon: mdi:car-connected
