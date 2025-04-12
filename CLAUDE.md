@@ -72,25 +72,40 @@ Claude should help users with the following tasks related to this Home Assistant
    - Added safe wrapper for scanner MQTT handlers
    - Added empty message payload check to prevent processing errors
    - Removed automatic restart from device addition scripts (v1.4.1)
+   - Improved lock handling to prevent concurrent reconnects (v0.2.8)
+   - Added a static MQTT handler to avoid duplicate subscriptions (v0.2.8)
 
 2. **"Extracted data is not a dictionary: <class 'int'>" Error**
    - Added better error handling in MQTT message processing
    - MQTT messages with integer payloads now handled gracefully
    - Added additional defensive coding in the message handler
+   - Enhanced JSON parsing with verbose logging for troubleshooting (v0.2.8)
+   - Added detailed device data format validation and logging (v0.2.8)
+
+3. **JSON Payload Handling**
+   - Added support for JSON-formatted payloads from BLE gateways
+   - Improved extraction of device data from different payload formats
+   - Enhanced metadata extraction from payloads
+   - Added device mapping support for friendly device names
 
 ### Implementation Details:
-1. In `__init__.py`:
-   - Created a `safe_mqtt_handler` wrapper for scanner MQTT handlers
-   - Added proper error catching for the message handler
-   - Implemented a debug handler as fallback when no scanner is found
-   - Added check for empty payloads to skip processing
+1. In `__init__.py` (v0.2.8):
+   - Enhanced the JSON parsing with more verbose logging
+   - Created a persistent static MQTT handler to prevent multiple subscriptions
+   - Improved the locking mechanism for MQTT reconnection
+   - Added detailed device data format validation and logging
+   - Implemented enhanced error handling in all critical sections
+   - Added unsubscribe delay to ensure clean MQTT reconnects
+   - Fixed potential race conditions in MQTT subscription handling
 
 2. In `ble_scripts.yaml` (v1.4.1):
    - Removed the automatic `homeassistant.restart` service call from the `add_ble_device` script
    - Updated notification to inform users that a manual restart may be needed
    - This prevents unintended Home Assistant restarts when using the reconnect button
 
-3. Next steps may include:
-   - Testing MQTT reconnection with the new handlers
-   - Reviewing other potential error sources in message processing
-   - Adding more detailed documentation for diagnostic purposes
+3. Debugging Improvements (v0.2.8):
+   - Added detailed payload structure logging for troubleshooting
+   - Enhanced logging of device data format detection
+   - Improved metadata extraction and device mapping
+   - Added MQTT topic storage for easier diagnostics
+   - Implemented better error messages throughout the codebase

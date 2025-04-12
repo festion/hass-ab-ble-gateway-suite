@@ -115,6 +115,7 @@ class AbBleScanner(BaseHaRemoteScanner):
             try:
                 # Try to decode as JSON first
                 payload_str = msg.payload.decode('utf-8')
+                _LOGGER.debug(f"Attempting to parse as JSON: {payload_str[:100]}...")
                 unpacked_data = json.loads(payload_str)
                 
                 # Immediately check and sanitize the data structure
@@ -122,6 +123,8 @@ class AbBleScanner(BaseHaRemoteScanner):
                     _LOGGER.warning(f"JSON data is not a dictionary: {type(unpacked_data)}")
                     # Convert to empty dict as a fallback
                     unpacked_data = {}
+                else:
+                    _LOGGER.debug(f"Successfully parsed JSON data with keys: {list(unpacked_data.keys())}")
                     
             except Exception as json_err:
                 # Log the error for diagnostic purposes
@@ -167,8 +170,13 @@ class AbBleScanner(BaseHaRemoteScanner):
                 devices_key = None
                 if b'devices' in unpacked_data:
                     devices_key = b'devices'  # msgpack binary key
+                    _LOGGER.debug("Found 'devices' as binary key (msgpack format)")
                 elif 'devices' in unpacked_data:
                     devices_key = 'devices'   # JSON string key
+                    _LOGGER.debug("Found 'devices' as string key (JSON format)")
+                else:
+                    # Dump the keys to the log for debugging
+                    _LOGGER.debug(f"Available keys in payload: {list(unpacked_data.keys())}")
                 
                 if devices_key is None:
                     _LOGGER.debug("No 'devices' field in MQTT payload")
@@ -178,9 +186,16 @@ class AbBleScanner(BaseHaRemoteScanner):
                     # Process device data with safety checks
                     devices_raw = unpacked_data[devices_key]
                     
+                    # Log what we received for devices
+                    if isinstance(devices_raw, list):
+                        _LOGGER.debug(f"Devices data is a list with {len(devices_raw)} items")
+                        if devices_raw and len(devices_raw) > 0:
+                            _LOGGER.debug(f"First device entry: {devices_raw[0]}")
+                    else:
+                        _LOGGER.warning(f"Devices data is not a list: {type(devices_raw)}")
+                    
                     # Ensure devices is a list
                     if not isinstance(devices_raw, list):
-                        _LOGGER.warning(f"Devices data is not a list: {type(devices_raw)}")
                         # Force conversion to list if possible
                         if isinstance(devices_raw, int):
                             _LOGGER.warning("Received an integer instead of a list of devices, using empty list")
@@ -192,7 +207,8 @@ class AbBleScanner(BaseHaRemoteScanner):
                             try:
                                 devices = [devices_raw]
                                 _LOGGER.info(f"Converted non-list device data to single-item list")
-                            except Exception:
+                            except Exception as list_err:
+                                _LOGGER.warning(f"Failed to convert to list: {list_err}")
                                 devices = []
                     else:
                         # It's already a list, we're good
@@ -795,12 +811,29 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         try:
             _LOGGER.info("Simple MQTT reconnect called")
             
-            # Use a critical section lock to prevent multiple concurrent reconnects
-            # which could potentially conflict with each other
-            reconnect_lock = asyncio.Lock()
+            # Create a static lock once
+            if not hasattr(simple_mqtt_reconnect, "lock"):
+                simple_mqtt_reconnect.lock = asyncio.Lock()
+            
+            # Fail fast if we can't acquire the lock to prevent potential restart issues
+            if simple_mqtt_reconnect.lock.locked():
+                _LOGGER.warning("Another reconnect operation in progress, skipping")
+                try:
+                    await hass.services.async_call(
+                        "persistent_notification", 
+                        "create", 
+                        {
+                            "title": "BLE Gateway Reconnect",
+                            "message": "Another reconnect operation is already in progress. Please wait.",
+                            "notification_id": "ble_gateway_reconnect"
+                        }
+                    )
+                except Exception:
+                    pass
+                return False
             
             # Only proceed if we can acquire the lock
-            async with reconnect_lock:
+            async with simple_mqtt_reconnect.lock:
                 # Create a notification
                 try:
                     await hass.services.async_call(
@@ -866,36 +899,43 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
                         pass  # Silently ignore notification errors
                     return False
                 
+                # Store our global handler if it doesn't exist
+                if not hasattr(simple_mqtt_reconnect, "handler"):
+                    # IMPORTANT CHANGE: Create a consistent safe handler
+                    # so we're not re-registering different handlers
+                    async def global_safe_mqtt_handler(msg):
+                        """Global safe MQTT handler that delegates to all scanners."""
+                        try:
+                            payload_len = len(msg.payload) if msg.payload else 0
+                            _LOGGER.debug(f"Global handler received MQTT message: {payload_len} bytes")
+                            
+                            # Skip empty payloads
+                            if not msg.payload:
+                                return
+                                
+                            # Process with all available scanners
+                            scanner_count = 0
+                            for entry_data in hass.data.get(DOMAIN, {}).values():
+                                if "scanner" in entry_data and entry_data["scanner"]:
+                                    scanner = entry_data["scanner"]
+                                    scanner_count += 1
+                                    try:
+                                        await scanner.async_on_mqtt_message(msg)
+                                    except Exception as handler_err:
+                                        _LOGGER.error(f"Error in scanner MQTT message handler: {handler_err}")
+                            
+                            if scanner_count == 0:
+                                _LOGGER.warning("No scanners found to process MQTT message")
+                        except Exception as err:
+                            _LOGGER.error(f"Global error in MQTT message handler: {err}")
+                    
+                    simple_mqtt_reconnect.handler = global_safe_mqtt_handler
+                
                 # Subscribe to all topics
                 success = False
                 
-                # IMPORTANT CHANGE: Create a consistent safe handler outside the loop
-                # so we're not re-registering different handlers
-                async def global_safe_mqtt_handler(msg):
-                    """Global safe MQTT handler that delegates to all scanners."""
-                    try:
-                        payload_len = len(msg.payload) if msg.payload else 0
-                        _LOGGER.debug(f"Global handler received MQTT message: {payload_len} bytes")
-                        
-                        # Skip empty payloads
-                        if not msg.payload:
-                            return
-                            
-                        # Process with all available scanners
-                        scanner_count = 0
-                        for entry_data in hass.data.get(DOMAIN, {}).values():
-                            if "scanner" in entry_data and entry_data["scanner"]:
-                                scanner = entry_data["scanner"]
-                                scanner_count += 1
-                                try:
-                                    await scanner.async_on_mqtt_message(msg)
-                                except Exception as handler_err:
-                                    _LOGGER.error(f"Error in scanner MQTT message handler: {handler_err}")
-                        
-                        if scanner_count == 0:
-                            _LOGGER.warning("No scanners found to process MQTT message")
-                    except Exception as err:
-                        _LOGGER.error(f"Global error in MQTT message handler: {err}")
+                # Safely access our persistent handler
+                global_handler = simple_mqtt_reconnect.handler
                 
                 for topic in mqtt_topics:
                     try:
@@ -905,17 +945,21 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
                         try:
                             # Unsubscribe using wildcard to catch any existing handlers
                             # This is a defensive measure to ensure we don't have multiple handlers
+                            # We don't pass a callback to unsubscribe from all handlers on this topic
                             await mqtt.async_unsubscribe(hass, topic)
                             _LOGGER.debug(f"Unsubscribed from {topic}")
                         except Exception as unsub_err:
                             _LOGGER.debug(f"Error unsubscribing from {topic}: {unsub_err}")
                             # Continue anyway
                         
+                        # Add a small delay to ensure unsubscribe completes
+                        await asyncio.sleep(0.5)
+                        
                         # Try to subscribe with our global safe handler
                         subscription = await mqtt.async_subscribe(
                             hass, 
                             topic, 
-                            global_safe_mqtt_handler, 
+                            global_handler, 
                             encoding=None
                         )
                         
@@ -930,6 +974,13 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
                 
                 # Short delay to ensure MQTT subscription is established
                 await asyncio.sleep(2)
+                
+                # Store MQTT subscriptions in component data for future reference
+                if DOMAIN in hass.data:
+                    for entry_id in hass.data[DOMAIN]:
+                        if isinstance(hass.data[DOMAIN][entry_id], dict):
+                            hass.data[DOMAIN][entry_id]['mqtt_topics'] = mqtt_topics
+                            hass.data[DOMAIN][entry_id]['last_reconnect'] = datetime.datetime.now().isoformat()
                 
                 # Update gateway sensor state if available
                 try:
