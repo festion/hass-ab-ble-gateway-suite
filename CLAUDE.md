@@ -63,7 +63,7 @@ Claude should help users with the following tasks related to this Home Assistant
 - Naming: snake_case for variables/functions, PascalCase for classes
 - String formatting: Use f-strings
 
-## Current Improvements (2024-04-12)
+## Current Improvements (2024-04-13)
 
 ### Fixed Issues:
 1. **Home Assistant Restart on Gateway Reconnect**
@@ -75,6 +75,8 @@ Claude should help users with the following tasks related to this Home Assistant
    - Improved lock handling to prevent concurrent reconnects (v0.2.8)
    - Added a static MQTT handler to avoid duplicate subscriptions (v0.2.8)
    - Fixed argument mismatch in advertisement processing (v0.2.9)
+   - Added 30-second cooldown between reconnect attempts (v0.3.0)
+   - Implemented global reconnect state tracking to prevent concurrent reconnects (v0.3.0)
 
 2. **"Extracted data is not a dictionary: <class 'int'>" Error**
    - Added better error handling in MQTT message processing
@@ -90,7 +92,10 @@ Claude should help users with the following tasks related to this Home Assistant
    - Added device mapping support for friendly device names
 
 ### Implementation Details:
-1. In `__init__.py` (v0.2.9):
+1. In `__init__.py` (v0.3.0):
+   - Implemented global reconnect state tracking at domain level
+   - Added 30-second cooldown between reconnect attempts
+   - Ensured proper cleanup of reconnect state even on error
    - Fixed critical issue with _async_on_advertisement call parameter mismatch
    - Added required monotonic timestamp and details parameters to advertisement calls
    - Implemented fallback MQTT message handling to prevent errors during reconnect
@@ -107,7 +112,9 @@ Claude should help users with the following tasks related to this Home Assistant
    - Updated notification to inform users that a manual restart may be needed
    - This prevents unintended Home Assistant restarts when using the reconnect button
 
-3. Debugging Improvements (v0.2.9):
+3. Debugging Improvements (v0.3.0):
+   - Added domain-level logging of reconnect operations
+   - Enhanced parameter validation in reconnect function
    - Added detailed payload structure logging for troubleshooting
    - Enhanced logging of device data format detection
    - Improved metadata extraction and device mapping

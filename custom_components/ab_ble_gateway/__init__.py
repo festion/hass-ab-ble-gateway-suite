@@ -724,6 +724,10 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     set_log_level()
     _LOGGER.info("AB BLE Gateway integration starting setup")
     
+    # Store global reconnect state
+    hass.data[DOMAIN]["reconnect_in_progress"] = False
+    hass.data[DOMAIN]["last_reconnect_time"] = datetime.datetime.now().isoformat()
+    
     # We're going to skip file copying for now and register our services directly
     # This avoids file operations which can cause blocking issues
     _LOGGER.info("Setting up services and helpers directly")
@@ -742,6 +746,54 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     # Define a safe wrapper for the reconnect service
     async def safe_reconnect_service_wrapper(call):
         """Safely wrap the reconnect service to prevent HA restarts."""
+        # Critical safeguard to prevent multiple concurrent reconnects
+        # that might cause Home Assistant to restart
+        if hass.data[DOMAIN].get("reconnect_in_progress", False):
+            _LOGGER.warning("Another reconnect operation is already in progress, skipping")
+            try:
+                await hass.services.async_call(
+                    "persistent_notification", 
+                    "create", 
+                    {
+                        "title": "BLE Gateway Reconnect",
+                        "message": "Another reconnect operation is already in progress. Please wait before trying again.",
+                        "notification_id": "ble_gateway_reconnect"
+                    }
+                )
+            except Exception:
+                pass  # Silently ignore notification errors
+            return False
+        
+        # Enforce cooldown period to avoid rapid reconnect attempts
+        last_reconnect = hass.data[DOMAIN].get("last_reconnect_time")
+        now = datetime.datetime.now()
+        if last_reconnect:
+            try:
+                last_time = datetime.datetime.fromisoformat(last_reconnect)
+                # Enforce 30 second cooldown between reconnect attempts
+                if (now - last_time).total_seconds() < 30:
+                    _LOGGER.warning("Reconnect cooldown period active, please wait")
+                    try:
+                        await hass.services.async_call(
+                            "persistent_notification", 
+                            "create", 
+                            {
+                                "title": "BLE Gateway Reconnect",
+                                "message": "Please wait at least 30 seconds between reconnect attempts.",
+                                "notification_id": "ble_gateway_reconnect"
+                            }
+                        )
+                    except Exception:
+                        pass  # Silently ignore notification errors
+                    return False
+            except (ValueError, TypeError):
+                # Invalid timestamp format, ignore cooldown
+                pass
+        
+        # Mark reconnect as in progress at the DOMAIN level
+        hass.data[DOMAIN]["reconnect_in_progress"] = True
+        hass.data[DOMAIN]["last_reconnect_time"] = now.isoformat()
+            
         try:
             # Create a notification at the start
             try:
@@ -778,7 +830,9 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
                     )
                 except Exception:
                     pass  # Silently ignore notification errors
-                    
+            
+            # Reset reconnect in progress flag
+            hass.data[DOMAIN]["reconnect_in_progress"] = False    
             return success
             
         except Exception as outer_err:
@@ -797,6 +851,8 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
             except Exception:
                 pass  # Silently ignore notification errors
                 
+            # Reset reconnect in progress flag even on error
+            hass.data[DOMAIN]["reconnect_in_progress"] = False
             return False
     
     # Register reconnect service with the safe wrapper
