@@ -67,6 +67,12 @@ The combined dashboard includes:
 - Gateway status monitoring
 - Gateway management controls (reconnect, logs)
 
+The dashboard uses a multi-view structure with tabs:
+- Main view with navigation buttons
+- Device Discovery view for scanning and adding devices
+- Managed Devices view for viewing discovered devices
+- Gateway Management view for monitoring and controlling the gateway
+
 ## Key Concepts
 - AprilBrother BLE Gateway integration
 - BLE device scanning and discovery
