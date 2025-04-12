@@ -213,10 +213,11 @@ class AbBleScanner(BaseHaRemoteScanner):
                         _LOGGER.debug(f"Found device map: {device_map}")
                 
                 # Store metadata as part of domain data for use by services
-                if metadata and hasattr(hass, 'data') and DOMAIN in hass.data:
-                    for entry_id in hass.data[DOMAIN]:
-                        hass.data[DOMAIN][entry_id]['metadata'] = metadata
-                        hass.data[DOMAIN][entry_id]['device_map'] = device_map
+                if metadata and hasattr(self, '_async_on_advertisement') and hasattr(self, 'hass') and self.hass and DOMAIN in self.hass.data:
+                    for entry_id in self.hass.data[DOMAIN]:
+                        if isinstance(self.hass.data[DOMAIN][entry_id], dict):
+                            self.hass.data[DOMAIN][entry_id]['metadata'] = metadata
+                            self.hass.data[DOMAIN][entry_id]['device_map'] = device_map
             except Exception as devices_err:
                 _LOGGER.warning(f"Error extracting devices data: {devices_err}")
                 # Ensure we have a list
