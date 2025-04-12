@@ -106,6 +106,11 @@ class AbBleScanner(BaseHaRemoteScanner):
             unpacked_data = None
             devices = None
             
+            # Skip processing if the payload is empty or None
+            if not msg.payload:
+                _LOGGER.debug("Empty MQTT payload received, skipping processing")
+                return
+                
             # First try to unpack the message
             try:
                 # Use msgpack directly but be ready to handle the extra data error
@@ -680,165 +685,190 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         try:
             _LOGGER.info("Simple MQTT reconnect called")
             
-            # Create a notification
-            try:
-                await hass.services.async_call(
-                    "persistent_notification", 
-                    "create", 
-                    {
-                        "title": "BLE Gateway Reconnect",
-                        "message": "Attempting to reconnect the BLE Gateway... Please wait.",
-                        "notification_id": "ble_gateway_reconnect"
-                    }
-                )
-            except Exception as notify_err:
-                _LOGGER.warning(f"Failed to create notification: {notify_err}")
-                # Continue anyway
+            # Use a critical section lock to prevent multiple concurrent reconnects
+            # which could potentially conflict with each other
+            reconnect_lock = asyncio.Lock()
             
-            # Wait a short time
-            await asyncio.sleep(1)
-            
-            # Find all gateway entries and get their MQTT topics
-            mqtt_topics = []
-            try:
-                # First try to get topics from domain data
-                if DOMAIN in hass.data:
-                    for entry_id, entry_data in hass.data[DOMAIN].items():
-                        if "scanner" not in entry_data:
-                            continue
-                            
-                        # Get the entry to access its data
-                        config_entries = hass.config_entries
-                        entry = next((e for e in config_entries.async_entries(DOMAIN) if e.entry_id == entry_id), None)
-                        
-                        if not entry:
-                            continue
-                            
-                        config = entry.as_dict()
-                        mqtt_topic = config.get('data', {}).get('mqtt_topic')
-                        
-                        if mqtt_topic:
-                            mqtt_topics.append(mqtt_topic)
-            except Exception as topics_err:
-                _LOGGER.warning(f"Error getting MQTT topics from domain data: {topics_err}")
-                # Continue with default topic
-            
-            # If no topics found, use a default
-            if not mqtt_topics:
-                _LOGGER.info("No MQTT topics found in config entries, using default topic")
-                mqtt_topics = ["gw/#"]
-            
-            _LOGGER.info(f"MQTT topics to reconnect: {mqtt_topics}")
-                
-            # Check MQTT component availability
-            if not hass.data.get("mqtt"):
-                _LOGGER.error("MQTT component not ready. Cannot subscribe.")
-                # Create notification about MQTT not being ready
+            # Only proceed if we can acquire the lock
+            async with reconnect_lock:
+                # Create a notification
                 try:
                     await hass.services.async_call(
                         "persistent_notification", 
                         "create", 
                         {
                             "title": "BLE Gateway Reconnect",
-                            "message": "Cannot reconnect: MQTT component not ready.",
+                            "message": "Attempting to reconnect the BLE Gateway... Please wait.",
                             "notification_id": "ble_gateway_reconnect"
                         }
                     )
-                except Exception:
-                    pass  # Silently ignore notification errors
-                return False
-            
-            # Subscribe to all topics
-            success = False
-            for topic in mqtt_topics:
+                except Exception as notify_err:
+                    _LOGGER.warning(f"Failed to create notification: {notify_err}")
+                    # Continue anyway
+                
+                # Find all gateway entries and get their MQTT topics
+                mqtt_topics = []
                 try:
-                    _LOGGER.info(f"Subscribing to MQTT topic: {topic}")
+                    # First try to get topics from domain data
+                    if DOMAIN in hass.data:
+                        for entry_id, entry_data in hass.data[DOMAIN].items():
+                            if "scanner" not in entry_data:
+                                continue
+                                
+                            # Get the entry to access its data
+                            config_entries = hass.config_entries
+                            entry = next((e for e in config_entries.async_entries(DOMAIN) if e.entry_id == entry_id), None)
+                            
+                            if not entry:
+                                continue
+                                
+                            config = entry.as_dict()
+                            mqtt_topic = config.get('data', {}).get('mqtt_topic')
+                            
+                            if mqtt_topic:
+                                mqtt_topics.append(mqtt_topic)
+                except Exception as topics_err:
+                    _LOGGER.warning(f"Error getting MQTT topics from domain data: {topics_err}")
+                    # Continue with default topic
+                
+                # If no topics found, use a default
+                if not mqtt_topics:
+                    _LOGGER.info("No MQTT topics found in config entries, using default topic")
+                    mqtt_topics = ["gw/#"]
+                
+                _LOGGER.info(f"MQTT topics to reconnect: {mqtt_topics}")
                     
-                    # Try to unsubscribe first to clean up any existing subscriptions
+                # Check MQTT component availability
+                if not hass.data.get("mqtt"):
+                    _LOGGER.error("MQTT component not ready. Cannot subscribe.")
+                    # Create notification about MQTT not being ready
                     try:
-                        # Unsubscribe without using scanner handler reference
-                        await mqtt.async_unsubscribe(hass, topic, None)
-                        _LOGGER.debug(f"Unsubscribed from {topic}")
-                    except Exception as unsub_err:
-                        _LOGGER.debug(f"Error unsubscribing from {topic}: {unsub_err}")
-                        # Continue anyway
-                    
-                    # Try to find scanners in domain data
-                    for entry_id, entry_data in hass.data.get(DOMAIN, {}).items():
-                        if "scanner" in entry_data:
-                            scanner = entry_data["scanner"]
-                            try:
-                                # Try to subscribe with the scanner's handler
-                                await mqtt.async_subscribe(
-                                    hass, 
-                                    topic, 
-                                    scanner.async_on_mqtt_message, 
-                                    encoding=None
-                                )
-                                _LOGGER.info(f"Successfully subscribed to {topic} with scanner {entry_id}")
-                                success = True
-                                break  # Break after the first successful subscription
-                            except Exception as sub_err:
-                                _LOGGER.warning(f"Error subscribing to {topic} with scanner {entry_id}: {sub_err}")
-                                # Continue to try with other scanners
-                    
-                    # If we haven't succeeded with any scanner, try with a null handler
-                    if not success:
-                        _LOGGER.info(f"Subscribing to {topic} with null handler as fallback")
-                        await mqtt.async_subscribe(hass, topic, None)
-                        success = True
+                        await hass.services.async_call(
+                            "persistent_notification", 
+                            "create", 
+                            {
+                                "title": "BLE Gateway Reconnect",
+                                "message": "Cannot reconnect: MQTT component not ready.",
+                                "notification_id": "ble_gateway_reconnect"
+                            }
+                        )
+                    except Exception:
+                        pass  # Silently ignore notification errors
+                    return False
+                
+                # Subscribe to all topics
+                success = False
+                
+                # IMPORTANT CHANGE: Create a consistent safe handler outside the loop
+                # so we're not re-registering different handlers
+                async def global_safe_mqtt_handler(msg):
+                    """Global safe MQTT handler that delegates to all scanners."""
+                    try:
+                        payload_len = len(msg.payload) if msg.payload else 0
+                        _LOGGER.debug(f"Global handler received MQTT message: {payload_len} bytes")
                         
-                except Exception as mqtt_err:
-                    _LOGGER.error(f"Error subscribing to {topic}: {mqtt_err}")
-            
-            # Update gateway sensor state if available
-            try:
-                # Set up the state directly using the hass.states.async_set method
-                attributes = {
-                    "friendly_name": "BLE Gateway",
-                    "icon": "mdi:bluetooth-connect",
-                    "devices": [],
-                    "gateway_id": "AprilBrother-Gateway4",
-                    "gateway_status": "Connected" if success else "Error",
-                    "last_scan": datetime.datetime.now().isoformat()
-                }
+                        # Skip empty payloads
+                        if not msg.payload:
+                            return
+                            
+                        # Process with all available scanners
+                        scanner_count = 0
+                        for entry_data in hass.data.get(DOMAIN, {}).values():
+                            if "scanner" in entry_data and entry_data["scanner"]:
+                                scanner = entry_data["scanner"]
+                                scanner_count += 1
+                                try:
+                                    await scanner.async_on_mqtt_message(msg)
+                                except Exception as handler_err:
+                                    _LOGGER.error(f"Error in scanner MQTT message handler: {handler_err}")
+                        
+                        if scanner_count == 0:
+                            _LOGGER.warning("No scanners found to process MQTT message")
+                    except Exception as err:
+                        _LOGGER.error(f"Global error in MQTT message handler: {err}")
                 
-                # Create/update the sensor directly 
-                hass.states.async_set(
-                    "sensor.ble_gateway_raw_data", 
-                    "online" if success else "error", 
-                    attributes
-                )
-                _LOGGER.info("Updated BLE gateway status sensor")
-            except Exception as state_err:
-                _LOGGER.warning(f"Failed to update gateway sensor state: {state_err}")
-            
-            # Update notification based on result
-            try:
-                if success:
-                    await hass.services.async_call(
-                        "persistent_notification", 
-                        "create", 
-                        {
-                            "title": "BLE Gateway Reconnect",
-                            "message": f"Successfully subscribed to MQTT topics: {', '.join(mqtt_topics)}",
-                            "notification_id": "ble_gateway_reconnect"
-                        }
-                    )
-                else:
-                    await hass.services.async_call(
-                        "persistent_notification", 
-                        "create", 
-                        {
-                            "title": "BLE Gateway Reconnect",
-                            "message": "Failed to resubscribe to MQTT topics.",
-                            "notification_id": "ble_gateway_reconnect"
-                        }
-                    )
-            except Exception as notify_err:
-                _LOGGER.warning(f"Failed to create result notification: {notify_err}")
+                for topic in mqtt_topics:
+                    try:
+                        _LOGGER.info(f"Subscribing to MQTT topic: {topic}")
+                        
+                        # Try to unsubscribe first to clean up any existing subscriptions
+                        try:
+                            # Unsubscribe using wildcard to catch any existing handlers
+                            # This is a defensive measure to ensure we don't have multiple handlers
+                            await mqtt.async_unsubscribe(hass, topic)
+                            _LOGGER.debug(f"Unsubscribed from {topic}")
+                        except Exception as unsub_err:
+                            _LOGGER.debug(f"Error unsubscribing from {topic}: {unsub_err}")
+                            # Continue anyway
+                        
+                        # Try to subscribe with our global safe handler
+                        subscription = await mqtt.async_subscribe(
+                            hass, 
+                            topic, 
+                            global_safe_mqtt_handler, 
+                            encoding=None
+                        )
+                        
+                        if subscription:
+                            _LOGGER.info(f"Successfully subscribed to {topic} with global handler")
+                            success = True
+                        else:
+                            _LOGGER.error(f"Failed to subscribe to {topic}")
+                            
+                    except Exception as mqtt_err:
+                        _LOGGER.error(f"Error subscribing to {topic}: {mqtt_err}")
                 
-            return success
+                # Short delay to ensure MQTT subscription is established
+                await asyncio.sleep(2)
+                
+                # Update gateway sensor state if available
+                try:
+                    # Set up the state directly using the hass.states.async_set method
+                    attributes = {
+                        "friendly_name": "BLE Gateway",
+                        "icon": "mdi:bluetooth-connect",
+                        "devices": [],
+                        "gateway_id": "AprilBrother-Gateway4",
+                        "gateway_status": "Connected" if success else "Error",
+                        "last_scan": datetime.datetime.now().isoformat()
+                    }
+                    
+                    # Create/update the sensor directly 
+                    hass.states.async_set(
+                        "sensor.ble_gateway_raw_data", 
+                        "online" if success else "error", 
+                        attributes
+                    )
+                    _LOGGER.info("Updated BLE gateway status sensor")
+                except Exception as state_err:
+                    _LOGGER.warning(f"Failed to update gateway sensor state: {state_err}")
+                
+                # Update notification based on result
+                try:
+                    if success:
+                        await hass.services.async_call(
+                            "persistent_notification", 
+                            "create", 
+                            {
+                                "title": "BLE Gateway Reconnect",
+                                "message": f"Successfully subscribed to MQTT topics: {', '.join(mqtt_topics)}",
+                                "notification_id": "ble_gateway_reconnect"
+                            }
+                        )
+                    else:
+                        await hass.services.async_call(
+                            "persistent_notification", 
+                            "create", 
+                            {
+                                "title": "BLE Gateway Reconnect",
+                                "message": "Failed to resubscribe to MQTT topics.",
+                                "notification_id": "ble_gateway_reconnect"
+                            }
+                        )
+                except Exception as notify_err:
+                    _LOGGER.warning(f"Failed to create result notification: {notify_err}")
+                    
+                return success
         except Exception as e:
             _LOGGER.error(f"Error in simple MQTT reconnect: {e}")
             try:
