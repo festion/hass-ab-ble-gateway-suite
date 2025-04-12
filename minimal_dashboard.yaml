@@ -1,33 +1,34 @@
-title: "BLE Raw Data"
+title: BLE Data
+path: ble-data
+icon: mdi:bluetooth
 views:
-  - path: default_view
-    title: "BLE Raw Data"
+  - title: BLE Data
+    path: default_view
     badges: []
     cards:
       - type: entities
-        title: "BLE Gateway Info"
+        title: BLE Gateway Raw Data
         entities:
           - entity: sensor.ble_gateway_raw_data
-            name: "Gateway Status"
+        state_color: true
       
-      - type: markdown
-        content: |-
-          ## Device Data
-          ```yaml
-          {{ state_attr('sensor.ble_gateway_raw_data', 'devices') | tojson }}
-          ```
-          
-      - type: markdown
-        content: |-
-          ## Device Map
-          ```yaml
-          {{ state_attr('sensor.ble_gateway_raw_data', 'device_map') | tojson }}
-          ```
+      - type: button
+        tap_action:
+          action: call-service
+          service: ab_ble_gateway.mqtt_reconnect
+          data: {}
+        name: Reconnect MQTT
+        icon: mdi:connection
       
       - type: entities
-        title: "Gateway Actions"
-        show_header_toggle: false
+        title: Add BLE Device
         entities:
-          - entity: button.bluetooth_scan
-            name: "Scan for Devices"
-            icon: mdi:bluetooth-search
+          - entity: input_text.new_ble_device_name
+          - entity: input_text.new_ble_device_mac
+          - entity: input_text.new_ble_device_category
+          - entity: script.add_ble_device
+        footer:
+          type: buttons
+          entities:
+            - entity: script.add_ble_device
+              name: Add Device

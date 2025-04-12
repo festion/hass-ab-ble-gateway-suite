@@ -58,20 +58,52 @@ To manually install the dashboard:
 1. Go to Home Assistant UI
 2. Navigate to Settings > Dashboards
 3. Click "Add Dashboard" then select "From YAML"
-4. Copy the contents from `btle_combined_dashboard.yaml`
+4. Copy the contents from one of the dashboard YAML files
 5. Save the dashboard
 
-The combined dashboard includes:
-- Device discovery with scanning functionality
-- Device management interface
-- Gateway status monitoring
-- Gateway management controls (reconnect, logs)
+### Dashboard Options
 
-The dashboard uses a multi-view structure with tabs:
-- Main view with navigation buttons
-- Device Discovery view for scanning and adding devices
-- Managed Devices view for viewing discovered devices
-- Gateway Management view for monitoring and controlling the gateway
+1. **Basic Dashboard** (`basic_dashboard.yaml`):
+   - Simple status display with gateway attributes
+   - MQTT reconnect button
+   - Detected devices counter
+   - **Recommended for troubleshooting**
+
+2. **Minimal Dashboard** (`minimal_dashboard.yaml`):
+   - Ultra-simple view with only raw data
+   - MQTT reconnect button
+   - Device addition form
+   - **Best for initial testing**
+
+3. **Combined Dashboard** (`btle_combined_dashboard.yaml`):
+   - Full-featured dashboard with all functionality
+   - Multi-view structure with tabs
+   - Device discovery and management
+   - Gateway status monitoring
+   - **Use once basic functionality is confirmed**
+
+### Troubleshooting Dashboard Issues
+
+1. **Entity Not Available**:
+   - Make sure integration is correctly installed
+   - Verify gateway is sending data (check MQTT Explorer)
+   - Try the MQTT reconnect button
+   - Restart Home Assistant if needed
+
+2. **Missing Input Helpers**:
+   - Create them manually if not automatically created:
+     - `input_text.new_ble_device_name`
+     - `input_text.new_ble_device_mac`
+     - `input_text.new_ble_device_category`
+
+3. **Dashboard Not Visible**:
+   - Ensure "Show in sidebar" is enabled
+   - Check browser cache or try different browser
+
+4. **Null Data Display**:
+   - Verify gateway configuration
+   - Check MQTT connection
+   - Inspect raw payload format
 
 ## Key Concepts
 - AprilBrother BLE Gateway integration
@@ -90,7 +122,7 @@ The dashboard uses a multi-view structure with tabs:
 - Naming: snake_case for variables/functions, PascalCase for classes
 - String formatting: Use f-strings
 
-## Current Improvements (2024-04-13)
+## Current Improvements (2024-04-13 - v0.3.7)
 
 ### Fixed Issues:
 1. **Home Assistant Restart on Gateway Reconnect**
@@ -123,9 +155,11 @@ The dashboard uses a multi-view structure with tabs:
    - Added device mapping support for friendly device names
 
 4. **Dashboard Missing from Sidebar**
-   - Created combined dashboard YAML file for manual installation
+   - Created multiple dashboard options with progressive complexity
    - Added documentation on dashboard installation process
-   - Integrated device discovery and gateway management into single dashboard
+   - Created verification dashboard for entity troubleshooting
+   - Added defensive templating to handle missing attributes
+   - Implemented simplified dashboard options for easier troubleshooting
 
 5. **"Error getting MQTT topics" Bug**
    - Fixed error: "argument of type 'bool' is not iterable"

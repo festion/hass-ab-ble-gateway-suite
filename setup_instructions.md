@@ -12,42 +12,142 @@ Configure your AprilBrother BLE Gateway with these settings:
    - **MQTT Username/Password**: Your MQTT credentials
    - **MQTT ID Prefix**: `XBG_` (must be uppercase)
 
-The gateway will then publish all BLE advertisements to the MQTT topic `xbg`.
+## Home Assistant Integration Setup
 
-## Home Assistant Dashboard Setup
+1. Make sure the MQTT integration is already set up in Home Assistant
+2. Install the AprilBrother BLE Gateway integration
+   - Via HACS (recommended): Add this repository to HACS custom repositories
+   - Manual: Copy the `custom_components/ab_ble_gateway` folder to your HA config folder
+3. Restart Home Assistant
+4. Go to Settings > Devices & Services > Add Integration and search for "AprilBrother BLE Gateway"
+5. Configure with the following:
+   - MQTT Topic: `xbg` (must match gateway configuration)
+   - Gateway ID: Choose a unique ID for this gateway (e.g., "ble_gateway_1")
+   - Location: Optional label for this gateway's location
 
-### Option 1: Simple Dashboard (Recommended)
+## Dashboard Installation
 
-1. Go to Settings > Dashboards > Add Dashboard > From YAML
-2. Copy and paste the contents of `btle_simple_dashboard.yaml`
-3. This dashboard shows:
-   - Gateway status
-   - Raw device data
-   - Device mapping
-   - Controls for reconnecting
+### Option 1: Verification Dashboard (Recommended for Troubleshooting)
 
-### Option 2: Advanced Dashboard (Requires Additional Setup)
+1. Go to Home Assistant UI
+2. Navigate to Settings > Dashboards
+3. Click "Add Dashboard" then select "From YAML"
+4. Copy the contents from `verification_dashboard.yaml`
+5. Save the dashboard
 
-The advanced dashboard requires additional input helpers and scripts:
+This verification dashboard shows:
+- Status of all required entities
+- Raw MQTT payload display
+- Gateway attributes in YAML format
+- MQTT reconnect button
+- Log viewer shortcut
 
-1. Add the following to your Home Assistant configuration:
-   - Copy the input helpers from `enhance_ble_devices.yaml` to your `configuration.yaml`
-   - Copy the automation from `enhance_ble_devices.yaml` to your `automations.yaml`
-   - Copy the scripts from `enhance_ble_devices.yaml` to your `scripts.yaml`
+### Option 2: Minimal Dashboard (For Initial Testing)
 
-2. Go to Settings > Dashboards > Add Dashboard > From YAML
-3. Copy and paste the contents of `btle_combined_dashboard.yaml`
+1. Go to Home Assistant UI
+2. Navigate to Settings > Dashboards
+3. Click "Add Dashboard" then select "From YAML"
+4. Copy the contents from `minimal_dashboard.yaml`
+5. Save the dashboard
+
+The minimal dashboard includes only:
+- Raw gateway data display
+- MQTT reconnect button
+- Device addition form
+
+### Option 3: Basic Dashboard (More Features)
+
+1. Go to Home Assistant UI
+2. Navigate to Settings > Dashboards
+3. Click "Add Dashboard" then select "From YAML"
+4. Copy the contents from `basic_dashboard.yaml`
+5. Save the dashboard
+
+Features:
+- Gateway status and connection information
+- Attribute display (IP, MAC, gateway ID, etc.)
+- Device counter
+- MQTT reconnect button
+
+### Option 4: Combined Dashboard (Full Features)
+
+Only use this once the basic functionality is confirmed working with simpler dashboards.
+
+1. Go to Home Assistant UI
+2. Navigate to Settings > Dashboards
+3. Click "Add Dashboard" then select "From YAML"
+4. Copy the contents from `btle_combined_dashboard.yaml`
+5. Save the dashboard
 
 ## Troubleshooting
 
-If entities are missing:
-1. Check that all input helpers are defined in your configuration
-2. Ensure scripts are properly defined
-3. Verify the MQTT integration is working with your AprilBrother gateway
+### Dashboard Not Visible in Sidebar
 
-The logs will show messages like:
-```
-[custom_components.ab_ble_gateway] Successfully processed advertisement for D0:E2:9D:3E:51:BA
-```
+1. Go to Settings > Dashboards
+2. Make sure your dashboard is listed
+3. Ensure the "Show in sidebar" toggle is on
+4. Try different browsers or clear browser cache
 
-If you're seeing these logs but no data appears in the UI, try using the simple dashboard first to verify the data is being correctly received.
+### Entity Not Available Errors
+
+1. Check MQTT connection:
+   - Verify MQTT broker is running
+   - Check credentials in both HA and gateway
+   - Verify topic matches (`xbg` by default)
+
+2. Verify gateway is sending data:
+   - Check MQTT Explorer or similar tool to see messages on the topic
+   - Verify payload format matches expected JSON structure
+
+3. Restart integration:
+   - Go to Settings > Devices & Services
+   - Find the AprilBrother BLE Gateway integration
+   - Click on it and choose "Reload"
+
+### Missing Required Input Helpers
+
+The integration should create these automatically. If missing:
+
+1. Go to Settings > Devices & Controls > Helpers
+2. Create these input text helpers:
+   - `input_text.new_ble_device_name` (Label: "New BLE Device Name")
+   - `input_text.new_ble_device_mac` (Label: "New BLE Device MAC")
+   - `input_text.new_ble_device_category` (Label: "New BLE Device Category")
+
+### Null or Empty Data in Dashboard
+
+1. Check if gateway is sending data:
+   - Use the Verification Dashboard to see raw payloads
+   - Make sure payload structure matches expected format:
+     ```json
+     {
+       "devices": [[0, "D0:E2:9D:3E:51:BA", -86, "0201061AFF..."]],
+       "metadata": {
+         "gateway_id": "ble_gateway_1",
+         "device_map": {
+           "D0:E2:9D:3E:51:BA": "Friendly Name"
+         }
+       }
+     }
+     ```
+
+2. Verify integration configuration:
+   - Make sure MQTT topic matches what gateway is sending to
+   - Ensure gateway ID matches the one in MQTT payload
+
+3. Try the reconnection steps:
+   - Use the "Reconnect MQTT" button in the dashboard
+   - Check logs for any errors during reconnection
+   - Restart Home Assistant if needed
+
+### Missing Entities in Dashboard
+
+1. Check that `sensor.ble_gateway_raw_data` exists:
+   - Go to Developer Tools > States
+   - Search for "ble_gateway"
+   - If missing, the integration may not be correctly set up
+
+2. Verify your MQTT configuration:
+   - Make sure gateway is sending properly formatted messages
+   - Use MQTT Explorer to confirm messages are arriving
+   - Check your Home Assistant logs for MQTT connection issues

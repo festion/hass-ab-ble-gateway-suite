@@ -1,0 +1,59 @@
+title: BLE Utility
+path: ble-utility
+icon: mdi:bluetooth
+views:
+  - title: BLE Utility
+    path: main
+    icon: mdi:bluetooth
+    cards:
+      - type: entities
+        title: BLE Gateway Status
+        entities:
+          - entity: sensor.ble_gateway_raw_data
+            name: Gateway Status
+        state_color: true
+      
+      - type: markdown
+        content: |-
+          ## Gateway Information
+          
+          - **IP Address**: {{ state_attr('sensor.ble_gateway_raw_data', 'ip') | default('Not available') }}
+          - **MAC Address**: {{ state_attr('sensor.ble_gateway_raw_data', 'mac') | default('Not available') }}
+          - **Last Updated**: {{ state_attr('sensor.ble_gateway_raw_data', 'last_scan') | default('Not available') }}
+          - **RSSI**: {{ state_attr('sensor.ble_gateway_raw_data', 'rssi') | default('Not available') }}
+          - **Gateway ID**: {{ state_attr('sensor.ble_gateway_raw_data', 'gateway_id') | default('Not available') }}
+          - **Location**: {{ state_attr('sensor.ble_gateway_raw_data', 'location') | default('Not available') }}
+      
+      - type: markdown
+        content: |-
+          ## Detected Devices
+          {% set devices = state_attr('sensor.ble_gateway_raw_data', 'devices') | default([]) %}
+          Total devices: {{ devices | length }}
+          
+          {% if devices | length > 0 %}
+          | MAC Address | RSSI | Friendly Name |
+          |-------------|------|--------------|
+          {% set device_map = state_attr('sensor.ble_gateway_raw_data', 'device_map') | default({}) %}
+          {% for device in devices %}
+          {% set mac = device[1] | default('Unknown') %}
+          {% set friendly_name = device_map[mac] | default('Unnamed') %}
+          | {{ mac }} | {{ device[2] | default('--') }} | {{ friendly_name }} |
+          {% endfor %}
+          {% else %}
+          No devices detected.
+          {% endif %}
+      
+      - type: button
+        tap_action:
+          action: call-service
+          service: ab_ble_gateway.mqtt_reconnect
+          data: {}
+        name: Reconnect MQTT
+        icon: mdi:connection
+      
+      - type: button
+        tap_action:
+          action: navigate
+          navigation_path: /config/logs
+        name: View System Logs
+        icon: mdi:text-box-outline

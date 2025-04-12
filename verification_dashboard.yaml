@@ -1,0 +1,53 @@
+title: BLE Verification
+path: ble-verification
+icon: mdi:bluetooth-settings
+views:
+  - title: BLE Verification
+    path: default_view
+    badges: []
+    cards:
+      - type: entities
+        title: Entity Status Check
+        entities:
+          - entity: sensor.ble_gateway_raw_data
+            name: Gateway Raw Data Entity
+          - entity: input_text.new_ble_device_name
+            name: New Device Name Helper
+          - entity: input_text.new_ble_device_mac
+            name: New Device MAC Helper
+          - entity: input_text.new_ble_device_category
+            name: New Device Category Helper
+          - entity: script.add_ble_device
+            name: Add Device Script
+        state_color: true
+      
+      - type: markdown
+        title: Raw MQTT Payload
+        content: |
+          ```json
+          {{ states('sensor.ble_gateway_raw_data') }}
+          ```
+      
+      - type: markdown
+        title: Gateway Attributes
+        content: |
+          ```yaml
+          {% for attr, value in state_attr('sensor.ble_gateway_raw_data') | default({}) | dictsort %}
+          {{ attr }}: {{ value }}
+          {% endfor %}
+          ```
+      
+      - type: button
+        tap_action:
+          action: call-service
+          service: ab_ble_gateway.mqtt_reconnect
+          data: {}
+        name: Reconnect MQTT
+        icon: mdi:connection
+      
+      - type: button
+        tap_action:
+          action: navigate
+          navigation_path: /config/logs
+        name: View System Logs
+        icon: mdi:text-box-outline
