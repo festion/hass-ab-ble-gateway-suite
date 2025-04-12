@@ -127,6 +127,12 @@ The dashboard uses a multi-view structure with tabs:
    - Added documentation on dashboard installation process
    - Integrated device discovery and gateway management into single dashboard
 
+5. **"Error getting MQTT topics" Bug**
+   - Fixed error: "argument of type 'bool' is not iterable"
+   - Added type checking for hass.data[DOMAIN] in reconnect service
+   - Improved error handling in MQTT topic retrieval
+   - Added defensive coding against non-dictionary values
+
 ### Implementation Details:
 1. In `__init__.py` (v0.3.0):
    - Implemented global reconnect state tracking at domain level

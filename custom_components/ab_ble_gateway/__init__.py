@@ -963,9 +963,10 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
                 mqtt_topics = []
                 try:
                     # First try to get topics from domain data
-                    if DOMAIN in hass.data:
+                    if DOMAIN in hass.data and isinstance(hass.data[DOMAIN], dict):
                         for entry_id, entry_data in hass.data[DOMAIN].items():
-                            if "scanner" not in entry_data:
+                            # Skip if entry_data is not a dictionary or doesn't have scanner
+                            if not isinstance(entry_data, dict) or "scanner" not in entry_data:
                                 continue
                                 
                             # Get the entry to access its data
