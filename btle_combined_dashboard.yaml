@@ -94,22 +94,22 @@ views:
           - type: section
             label: Detected BLE Devices
           - type: markdown
-            content: >
+            content: |-
               {% set device_json = states('input_text.discovered_ble_devices') %}
               {% set devices = device_json | from_json %}
               {% set device_map = state_attr('sensor.ble_gateway_raw_data', 'device_map') or {} %}
               
               {% if devices|length > 0 %}
-                ### Discovered Devices
-                
-                | Device | MAC | RSSI | Select |
-                | ------ | --- | ---- | ------ |
-                {% for mac, rssi in devices.items() %}
-                | {{ device_map[mac|replace(':', '')] if mac|replace(':', '') in device_map else mac }} | {{ mac }} | {{ rssi }} dBm | [Select](###) |
-                {% endfor %}
+              ### Discovered Devices
+              
+              | Device | MAC | RSSI | Select |
+              | ------ | --- | ---- | ------ |
+              {% for mac, rssi in devices.items() %}
+              | {{ device_map[mac|replace(':', '')] if mac|replace(':', '') in device_map else mac }} | {{ mac }} | {{ rssi }} dBm | [Select](###) |
+              {% endfor %}
               {% else %}
-                ### No Devices Discovered
-                Press "Scan for BLE Devices" to search for nearby Bluetooth devices.
+              ### No Devices Discovered
+              Press "Scan for BLE Devices" to search for nearby Bluetooth devices.
               {% endif %}
           - type: button
             name: Scan and List Devices

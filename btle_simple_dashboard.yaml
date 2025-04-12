@@ -1,0 +1,49 @@
+title: BLE Gateway Monitor
+path: ble-gateway-monitor
+icon: mdi:bluetooth
+views:
+  - title: BLE Gateway Monitor
+    path: main
+    icon: mdi:bluetooth
+    cards:
+      - type: entities
+        title: BLE Gateway Status
+        entities:
+          - entity: sensor.ble_gateway_raw_data
+            name: Gateway Status
+            secondary_info: "{{ state_attr('sensor.ble_gateway_raw_data', 'gateway_id') or 'Unknown' }}"
+      
+      - type: markdown
+        content: |-
+          ## BLE Devices
+          
+          ```yaml
+          {{ state_attr('sensor.ble_gateway_raw_data', 'devices') | tojson(4) }}
+          ```
+          
+          ## Device Map
+          
+          ```yaml
+          {{ state_attr('sensor.ble_gateway_raw_data', 'device_map') | tojson(4) }}
+          ```
+          
+          ## Last Update
+          {{ state_attr('sensor.ble_gateway_raw_data', 'timestamp') }}
+      
+      - type: entities
+        title: Gateway Management
+        entities:
+          - type: button
+            name: Safe Reconnect
+            icon: mdi:connection
+            tap_action:
+              action: call-service
+              service: ab_ble_gateway.mqtt_reconnect
+              target: {}
+              data: {}
+          - type: button
+            name: Show Logs
+            icon: mdi:text-box-outline
+            tap_action:
+              action: navigate
+              navigation_path: /config/logs
