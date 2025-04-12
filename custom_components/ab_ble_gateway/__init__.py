@@ -415,15 +415,15 @@ class AbBleScanner(BaseHaRemoteScanner):
                         
                         _LOGGER.debug(f"Calling _async_on_advertisement for device {address}")
                         self._async_on_advertisement(
-                            address=address,
-                            rssi=rssi,
-                            local_name=local_name,
-                            service_uuids=service_uuids,
-                            service_data=service_data,
-                            manufacturer_data=manufacturer_data,
-                            tx_power=None,
-                            details={},  # details parameter (empty dict)
-                            advertisement_monotonic_time=[current_time]  # advertisement time as list with one timestamp
+                            address,
+                            rssi,
+                            local_name,
+                            service_uuids,
+                            service_data,
+                            manufacturer_data,
+                            None,  # tx_power
+                            {},  # details parameter (empty dict)
+                            [current_time]  # advertisement_monotonic_time as list with one timestamp
                         )
                         # Success - increment processed count
                         processed_count += 1
