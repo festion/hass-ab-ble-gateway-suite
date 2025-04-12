@@ -111,50 +111,72 @@ class AbBleScanner(BaseHaRemoteScanner):
                 _LOGGER.debug("Empty MQTT payload received, skipping processing")
                 return
                 
-            # First try to unpack the message
+            # First try to parse as JSON since the enhanced discovery addon uses JSON
             try:
-                # Use msgpack directly but be ready to handle the extra data error
-                unpacked_data = msgpack.unpackb(msg.payload, raw=True)
+                # Try to decode as JSON first
+                payload_str = msg.payload.decode('utf-8')
+                unpacked_data = json.loads(payload_str)
                 
                 # Immediately check and sanitize the data structure
                 if not isinstance(unpacked_data, dict):
-                    _LOGGER.warning(f"Unpacked data is not a dictionary: {type(unpacked_data)}")
+                    _LOGGER.warning(f"JSON data is not a dictionary: {type(unpacked_data)}")
                     # Convert to empty dict as a fallback
                     unpacked_data = {}
                     
-            except Exception as unpack_err:
+            except Exception as json_err:
                 # Log the error for diagnostic purposes
-                _LOGGER.info(f"Msgpack unpacking error: {unpack_err}")
-                # Initialize with empty dict
-                unpacked_data = {}
+                _LOGGER.debug(f"JSON parsing error, falling back to msgpack: {json_err}")
                 
-                # Try a workaround for the extra data issue by treating it as two parts
-                if "extra data" in str(unpack_err):
-                    try:
-                        # Use the Unpacker to just get the first object
-                        unpacker = msgpack.Unpacker(raw=True)
-                        unpacker.feed(msg.payload)
-                        unpacked_data = next(unpacker)
-                        _LOGGER.info("Successfully extracted partial data from msgpack payload")
+                # Fallback to msgpack for backward compatibility
+                try:
+                    # Use msgpack directly but be ready to handle the extra data error
+                    unpacked_data = msgpack.unpackb(msg.payload, raw=True)
+                    
+                    # Immediately check and sanitize the data structure
+                    if not isinstance(unpacked_data, dict):
+                        _LOGGER.warning(f"Unpacked data is not a dictionary: {type(unpacked_data)}")
+                        # Convert to empty dict as a fallback
+                        unpacked_data = {}
                         
-                        # Verify it's a dictionary
-                        if not isinstance(unpacked_data, dict):
-                            _LOGGER.warning(f"Extracted data is not a dictionary: {type(unpacked_data)}")
-                            unpacked_data = {}
-                    except Exception as workaround_err:
-                        _LOGGER.warning(f"Failed to extract data with workaround: {workaround_err}")
-                        # Keep the empty dict initialization
+                except Exception as unpack_err:
+                    # Log the error for diagnostic purposes
+                    _LOGGER.info(f"Msgpack unpacking error: {unpack_err}")
+                    # Initialize with empty dict
+                    unpacked_data = {}
+                    
+                    # Try a workaround for the extra data issue by treating it as two parts
+                    if "extra data" in str(unpack_err):
+                        try:
+                            # Use the Unpacker to just get the first object
+                            unpacker = msgpack.Unpacker(raw=True)
+                            unpacker.feed(msg.payload)
+                            unpacked_data = next(unpacker)
+                            _LOGGER.info("Successfully extracted partial data from msgpack payload")
+                            
+                            # Verify it's a dictionary
+                            if not isinstance(unpacked_data, dict):
+                                _LOGGER.warning(f"Extracted data is not a dictionary: {type(unpacked_data)}")
+                                unpacked_data = {}
+                        except Exception as workaround_err:
+                            _LOGGER.warning(f"Failed to extract data with workaround: {workaround_err}")
+                            # Keep the empty dict initialization
             
             # Now safely try to get the devices field
             try:
-                # Check for devices key
-                if b'devices' not in unpacked_data:
+                # Check for devices key in both binary (msgpack) and string (JSON) format
+                devices_key = None
+                if b'devices' in unpacked_data:
+                    devices_key = b'devices'  # msgpack binary key
+                elif 'devices' in unpacked_data:
+                    devices_key = 'devices'   # JSON string key
+                
+                if devices_key is None:
                     _LOGGER.debug("No 'devices' field in MQTT payload")
                     # Initialize with empty list
                     devices = []
                 else:
                     # Process device data with safety checks
-                    devices_raw = unpacked_data[b'devices']
+                    devices_raw = unpacked_data[devices_key]
                     
                     # Ensure devices is a list
                     if not isinstance(devices_raw, list):
