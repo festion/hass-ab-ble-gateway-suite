@@ -147,12 +147,8 @@ views:
                 var macAddress = '{{ mac }}';
                 var deviceName = '{{ name }}';
                 var rssiValue = {{ rssi|int }};
-                const inputMac = document.querySelector('ha-entity-attribute-editor[title=\'Selected Device MAC\'] input, 
-                                                      ha-textfield[title=\'Selected Device MAC\'] input, 
-                                                      [entity-id=\'input_text.selected_ble_device\'] input');
-                const inputName = document.querySelector('ha-entity-attribute-editor[title=\'Device Name\'] input,
-                                                       ha-textfield[title=\'Device Name\'] input,
-                                                       [entity-id=\'input_text.ble_device_name\'] input');
+                const inputMac = document.querySelector('ha-entity-attribute-editor[title=\'Selected Device MAC\'] input, ha-textfield[title=\'Selected Device MAC\'] input, [entity-id=\'input_text.selected_ble_device\'] input');
+                const inputName = document.querySelector('ha-entity-attribute-editor[title=\'Device Name\'] input, ha-textfield[title=\'Device Name\'] input, [entity-id=\'input_text.ble_device_name\'] input');
                 
                 if (inputMac) { 
                   inputMac.value = macAddress; 
