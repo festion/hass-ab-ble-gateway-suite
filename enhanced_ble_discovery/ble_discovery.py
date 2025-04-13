@@ -185,8 +185,8 @@ def get_ble_gateway_data():
         # First check for AprilBrother MQTT topic that might have our format
         for state in states:
             entity_id = state.get('entity_id', '')
-            # Check for MQTT sensors using the configured gateway topic (BTLE by default)
-            if entity_id.startswith('sensor.') and ('mqtt' in entity_id.lower() or 'btle' in entity_id.lower()):
+            # Check for MQTT sensors or any sensors with data in state
+            if entity_id.startswith('sensor.'):
                 state_value = state.get('state', '')
                 
                 # Skip empty states
@@ -261,6 +261,36 @@ def get_ble_gateway_data():
                     devices = state_data['attributes']['devices']
                     logging.info(f"Found {len(devices)} devices in {sensor_name}")
                     return devices
+        
+        # Specifically check for MQTT sensors that might contain our data
+        logging.info("Checking MQTT sensors for device data...")
+        mqtt_sensors = [s.get('entity_id') for s in states if s.get('entity_id', '').startswith('sensor.') and 'mqtt' in s.get('entity_id', '')]
+        for mqtt_sensor in mqtt_sensors[:20]:  # Limit to first 20 to avoid checking too many
+            try:
+                mqtt_response = requests.get(
+                    f"http://supervisor/core/api/states/{mqtt_sensor}",
+                    headers=headers
+                )
+                if mqtt_response.status_code >= 200 and mqtt_response.status_code < 300:
+                    mqtt_data = mqtt_response.json()
+                    state_value = mqtt_data.get('state', '')
+                    
+                    # Skip empty states
+                    if not state_value or state_value == 'unavailable' or state_value == 'unknown':
+                        continue
+                        
+                    # Check for JSON data
+                    if isinstance(state_value, str) and state_value.startswith('{'):
+                        try:
+                            payload = json.loads(state_value)
+                            if isinstance(payload, dict) and 'devices' in payload:
+                                logging.info(f"Found devices array in MQTT sensor {mqtt_sensor}")
+                                return payload  # Return full payload for processing
+                        except (json.JSONDecodeError, ValueError):
+                            pass
+            except Exception as e:
+                logging.debug(f"Error checking MQTT sensor {mqtt_sensor}: {e}")
+                continue
         
         # Create our own sensor data with simulated scan results as last resort
         logging.warning("No device data found through any method, creating sensor with empty data")
@@ -1341,7 +1371,7 @@ def collect_system_diagnostics():
     """
     diagnostics = {
         "timestamp": datetime.datetime.now().isoformat(),
-        "version": "1.6.2",  # Make sure to update this when changing versions
+        "version": "1.6.3",  # Make sure to update this when changing versions
         "python_version": ".".join(map(str, sys.version_info[:3])),
         "platform": sys.platform,
         "environment": {}
@@ -1515,6 +1545,31 @@ def main(log_level, scan_interval, gateway_topic=DEFAULT_GATEWAY_TOPIC):
             logging.info(f"Found relevant sensor entities: {sensor_entities}")
             logging.info(f"Found MQTT entities: {mqtt_entities[:10]}")
             
+            # Check for any sensors with JSON data containing devices array
+            json_containing_sensors = []
+            for state in states:
+                entity_id = state.get('entity_id', '')
+                if entity_id.startswith('sensor.'):
+                    state_value = state.get('state', '')
+                    if state_value and state_value != 'unavailable' and state_value != 'unknown':
+                        try:
+                            if state_value.startswith('{'):
+                                payload = json.loads(state_value)
+                                if isinstance(payload, dict) and 'devices' in payload:
+                                    json_containing_sensors.append(entity_id)
+                                    logging.info(f"Found sensor with devices array: {entity_id}")
+                                    logging.info(f"Device count: {len(payload['devices'])}")
+                                    # Also log the format of the first device for debugging
+                                    if payload['devices'] and len(payload['devices']) > 0:
+                                        logging.info(f"First device format: {type(payload['devices'][0])} - {payload['devices'][0]}")
+                        except (json.JSONDecodeError, ValueError, AttributeError):
+                            pass  # Not valid JSON or doesn't have expected structure, ignore
+            
+            if json_containing_sensors:
+                logging.info(f"Found sensors with JSON device data: {json_containing_sensors}")
+            else:
+                logging.info("No sensors with JSON device data found")
+                
             # Check specifically for the ble_gateway_raw_data sensor
             for state in states:
                 if state.get('entity_id') == 'sensor.ble_gateway_raw_data':

@@ -1,6 +1,6 @@
 {
     "name": "Enhanced BLE Device Discovery",
-    "version": "1.6.2",
+    "version": "1.6.3",
     "slug": "enhanced_ble_device_discovery",
     "description": "Discover and manage Bluetooth Low Energy devices with a user-friendly dashboard",
     "url": "https://github.com/festion/hass-ab-ble-gateway-suite/tree/main/enhanced_ble_discovery",

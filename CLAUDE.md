@@ -122,7 +122,7 @@ To manually install the dashboard:
 - Naming: snake_case for variables/functions, PascalCase for classes
 - String formatting: Use f-strings
 
-## Current Improvements (2024-04-13 - v0.3.19)
+## Current Improvements (2024-04-13 - v0.3.20)
 
 ### Fixed Issues:
 1. **Home Assistant Restart on Gateway Reconnect**
@@ -179,6 +179,7 @@ To manually install the dashboard:
    - Eliminated global variable declarations in favor of local variables (v0.3.17, v1.6.0)
    - Fixed template variable warnings for undefined mac_address and device_name in scripts (v0.3.18, v1.6.1)
    - Fixed device discovery issues where add-on reported "0 devices" despite valid MQTT payload (v0.3.19, v1.6.2)
+   - Enhanced MQTT sensor discovery with comprehensive scanning of all sensor entities (v0.3.20, v1.6.3)
 
 5. **"Error getting MQTT topics" Bug**
    - Fixed error: "argument of type 'bool' is not iterable"
@@ -195,6 +196,9 @@ To manually install the dashboard:
    - Improved handling of JSON payload format containing nested device arrays (v0.3.19, v1.6.2)
    - Added proper creation of device entries from Gateway format data (v0.3.19, v1.6.2)
    - Added specific handling for the format: `{"v":1,"mid":12,"time":1744564900,"ip":"192.168.1.82","mac":"E831CDCCCBB0","devices":[[0,"D712ED6A66C6",-85,"0201061AFF4C000215B5B182C7EAB14988AA99B5C1517008D90001C666C5"],[0,"D0E29D3E51BA",-91,"0201061AFF4C000215B5B182C7EAB14988AA99B5C1517008D90001BA51C5"]],"rssi":-43,"metadata":{...}}` (v0.3.19, v1.6.2)
+   - Further enhanced discovery by checking all sensor entities (not just those with specific names) (v0.3.20, v1.6.3)
+   - Added detailed debugging of all MQTT entities to show device formats (v0.3.20, v1.6.3)
+   - Added direct scanning of MQTT sensor states for device data regardless of entity naming (v0.3.20, v1.6.3)
 
 ### Implementation Details:
 1. In `__init__.py` (v0.3.0):
@@ -234,7 +238,7 @@ To manually install the dashboard:
    - Ensured compatibility with different entity availability states
    - Added conditional display based on entity availability
 
-5. Enhanced BLE Discovery Add-on (v0.3.19, v1.6.2):
+5. Enhanced BLE Discovery Add-on (v0.3.19-20, v1.6.2-3):
    - Fixed critical issue where add-on reported "Total discovered devices: 0" despite valid MQTT payload
    - Enhanced `get_ble_gateway_data()` function to detect and handle AprilBrother Gateway format
    - Improved `process_ble_gateway_data()` function to properly extract device information from nested arrays
@@ -243,3 +247,7 @@ To manually install the dashboard:
    - Implemented more robust logging to show exactly what format is being detected and processed
    - Added signature pattern recognition to identify AprilBrother Gateway payloads with fields like v, mid, time, ip, mac, devices
    - Enhanced MQTT sensor discovery to find sensors containing Gateway data in different forms
+   - Added comprehensive scanning of all sensor entities regardless of naming convention (v1.6.3)
+   - Added detailed debugging output showing format of device data found in sensors (v1.6.3)
+   - Improved entity search to scan any sensor entity that might contain device data in its state (v1.6.3)
+   - Added direct MQTT sensor scanning that analyzes the first 20 MQTT sensors for device data (v1.6.3)
