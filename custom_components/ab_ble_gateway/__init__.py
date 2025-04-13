@@ -230,10 +230,16 @@ class AbBleScanner(BaseHaRemoteScanner):
                 
                 # Store metadata as part of domain data for use by services
                 if metadata and hasattr(self, '_async_on_advertisement') and hasattr(self, 'hass') and self.hass and DOMAIN in self.hass.data:
-                    for entry_id in self.hass.data[DOMAIN]:
-                        if isinstance(self.hass.data[DOMAIN][entry_id], dict):
-                            self.hass.data[DOMAIN][entry_id]['metadata'] = metadata
-                            self.hass.data[DOMAIN][entry_id]['device_map'] = device_map
+                    # Ensure DOMAIN data is a dictionary
+                    domain_data = self.hass.data[DOMAIN]
+                    if not isinstance(domain_data, dict):
+                        _LOGGER.warning(f"DOMAIN data is not a dictionary: {type(domain_data)}")
+                    else:
+                        # Safe iteration through domain entries
+                        for entry_id, entry_data in domain_data.items():
+                            if isinstance(entry_data, dict):
+                                entry_data['metadata'] = metadata
+                                entry_data['device_map'] = device_map
             except Exception as devices_err:
                 _LOGGER.warning(f"Error extracting devices data: {devices_err}")
                 # Ensure we have a list
@@ -312,15 +318,28 @@ class AbBleScanner(BaseHaRemoteScanner):
                             # Check for device name in metadata if available
                             device_name = ""
                             if hasattr(self, 'hass') and DOMAIN in self.hass.data:
-                                for entry_id in self.hass.data[DOMAIN]:
-                                    if 'device_map' in self.hass.data[DOMAIN][entry_id]:
-                                        device_map = self.hass.data[DOMAIN][entry_id]['device_map']
-                                        # Check with and without colons
-                                        if mac_address in device_map:
-                                            device_name = device_map[mac_address]
-                                        elif mac_address.replace(':', '') in device_map:
-                                            device_name = device_map[mac_address.replace(':', '')]
-                                        break
+                                domain_data = self.hass.data[DOMAIN]
+                                # Ensure domain data is a dictionary
+                                if not isinstance(domain_data, dict):
+                                    _LOGGER.debug(f"DOMAIN data is not a dictionary when looking up device name: {type(domain_data)}")
+                                else:
+                                    # Safely iterate through domain entries
+                                    for entry_id, entry_data in domain_data.items():
+                                        if not isinstance(entry_data, dict):
+                                            continue
+                                            
+                                        if 'device_map' in entry_data:
+                                            device_map = entry_data['device_map']
+                                            if not isinstance(device_map, dict):
+                                                continue
+                                                
+                                            # Check with and without colons
+                                            if mac_address in device_map:
+                                                device_name = device_map[mac_address]
+                                                break
+                                            elif mac_address.replace(':', '') in device_map:
+                                                device_name = device_map[mac_address.replace(':', '')]
+                                                break
                             
                             # Create direct advertisement data
                             adv = {
@@ -1037,14 +1056,28 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
                                 
                             # Process with all available scanners
                             scanner_count = 0
-                            for entry_data in hass.data.get(DOMAIN, {}).values():
-                                if "scanner" in entry_data and entry_data["scanner"]:
-                                    scanner = entry_data["scanner"]
-                                    scanner_count += 1
-                                    try:
-                                        await scanner.async_on_mqtt_message(msg)
-                                    except Exception as handler_err:
-                                        _LOGGER.error(f"Error in scanner MQTT message handler: {handler_err}")
+                            domain_data = hass.data.get(DOMAIN, {})
+                            
+                            # Ensure domain data is a dictionary before iterating
+                            if not isinstance(domain_data, dict):
+                                _LOGGER.warning(f"DOMAIN data is not a dictionary: {type(domain_data)}")
+                                return
+                                
+                            for entry_id, entry_data in domain_data.items():
+                                # Skip non-dictionary entries or entries without scanner
+                                if not isinstance(entry_data, dict):
+                                    _LOGGER.debug(f"Skipping non-dictionary entry_data for {entry_id}")
+                                    continue
+                                    
+                                if "scanner" not in entry_data or not entry_data["scanner"]:
+                                    continue
+                                    
+                                scanner = entry_data["scanner"]
+                                scanner_count += 1
+                                try:
+                                    await scanner.async_on_mqtt_message(msg)
+                                except Exception as handler_err:
+                                    _LOGGER.error(f"Error in scanner MQTT message handler: {handler_err}")
                             
                             if scanner_count == 0:
                                 _LOGGER.warning("No scanners found to process MQTT message")

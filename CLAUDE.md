@@ -122,7 +122,7 @@ To manually install the dashboard:
 - Naming: snake_case for variables/functions, PascalCase for classes
 - String formatting: Use f-strings
 
-## Current Improvements (2024-04-13 - v0.3.13)
+## Current Improvements (2024-04-13 - v0.3.14)
 
 ### Fixed Issues:
 1. **Home Assistant Restart on Gateway Reconnect**
@@ -173,6 +173,9 @@ To manually install the dashboard:
    - Added type checking for hass.data[DOMAIN] in reconnect service
    - Improved error handling in MQTT topic retrieval
    - Added defensive coding against non-dictionary values
+   - Fixed global MQTT message handler to properly check data types before iteration (v0.3.14)
+   - Added comprehensive type checking for domain data and entry data (v0.3.14)
+   - Improved device name lookup with proper type safety checks (v0.3.14)
 
 ### Implementation Details:
 1. In `__init__.py` (v0.3.0):
