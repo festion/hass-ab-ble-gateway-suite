@@ -1,0 +1,104 @@
+test_ble_signal:
+  alias: Test BLE Device Signal
+  description: Test BLE device signal strength over time
+  fields:
+    mac_address:
+      description: MAC address of device to test
+      example: "AA:BB:CC:DD:EE:FF"
+    test_duration:
+      description: Test duration in seconds
+      example: 30
+  sequence:
+    # Format MAC address
+    - variables:
+        formatted_mac: >-
+          {% if mac_address is defined %}
+            {{ mac_address | replace(':', '') | replace('-', '') | upper }}
+          {% else %}
+            UNDEFINED_MAC
+          {% endif %}
+        readings: []
+        duration: "{{ test_duration|int(30) }}"
+    
+    # Start notification
+    - service: persistent_notification.create
+      data:
+        title: "BLE Signal Test"
+        message: "Starting signal test for {{ formatted_mac }} for {{ duration }} seconds..."
+        notification_id: "ble_signal_test"
+    
+    # Take multiple readings
+    - repeat:
+        count: "{{ (duration / 5)|int(6) }}"
+        sequence:
+          - service: button.press
+            target:
+              entity_id: button.bluetooth_scan
+          
+          - delay:
+              seconds: 2
+          
+          - variables:
+              gateway_data: "{{ state_attr('sensor.ble_gateway_raw_data', 'devices') }}"
+              current_rssi: >
+                {% if gateway_data is not none %}
+                  {% for device in gateway_data %}
+                    {% if device|length > 2 and device[1] == formatted_mac %}
+                      {{ device[2]|int(-100) }}
+                      {% break %}
+                    {% endif %}
+                  {% endfor %}
+                {% else %}
+                  -100
+                {% endif %}
+              readings: >
+                {{ readings + [current_rssi] }}
+              
+          - delay:
+              seconds: 3
+    
+    # Calculate results
+    - variables:
+        average_rssi: >
+          {% if readings|length > 0 %}
+            {{ (readings|sum / readings|length)|round(1) }}
+          {% else %}
+            -100
+          {% endif %}
+        min_rssi: >
+          {% if readings|length > 0 %}
+            {{ readings|min }}
+          {% else %}
+            -100
+          {% endif %}
+        max_rssi: >
+          {% if readings|length > 0 %}
+            {{ readings|max }}
+          {% else %}
+            -100
+          {% endif %}
+        detected_count: >
+          {% set count = 0 %}
+          {% for reading in readings %}
+            {% if reading > -100 %}
+              {% set count = count + 1 %}
+            {% endif %}
+          {% endfor %}
+          {{ count }}
+    
+    # Display results
+    - service: persistent_notification.create
+      data:
+        title: "BLE Signal Test Results"
+        message: >
+          Signal test for {{ formatted_mac }} complete:
+          
+          - Test duration: {{ duration }} seconds
+          - Samples taken: {{ readings|length }}
+          - Detection rate: {{ (detected_count / readings|length * 100)|round }}%
+          - Average RSSI: {{ average_rssi }} dBm
+          - Min RSSI: {{ min_rssi }} dBm
+          - Max RSSI: {{ max_rssi }} dBm
+          
+          Recommended threshold: {{ (min_rssi + 5)|round }} dBm
+        notification_id: "ble_signal_test"

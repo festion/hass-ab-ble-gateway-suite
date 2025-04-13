@@ -150,6 +150,27 @@ if [ ! -f "/config/scripts/ble_scripts.yaml" ]; then
     cp /ble_scripts.yaml /config/scripts/
 fi
 
+# Also install individual scripts to ensure they are available
+if [ -f "/scan_and_display_ble_devices.yaml" ]; then
+    cp /scan_and_display_ble_devices.yaml /config/scripts/
+    bashio::log.info "Installed scan_and_display_ble_devices script"
+fi
+
+if [ -f "/test_ble_signal.yaml" ]; then
+    cp /test_ble_signal.yaml /config/scripts/
+    bashio::log.info "Installed test_ble_signal script"
+fi
+
+# Create script.yaml reference if it doesn't exist
+if [ ! -f "/config/configuration.yaml" ] || ! grep -q "script: !include scripts.yaml" "/config/configuration.yaml"; then
+    if [ -f "/config/configuration.yaml" ]; then
+        echo "" >> /config/configuration.yaml
+        echo "# Include scripts for BLE discovery" >> /config/configuration.yaml
+        echo "script: !include_dir_merge_named scripts/" >> /config/configuration.yaml
+        bashio::log.info "Added script include directive to configuration.yaml"
+    fi
+fi
+
 # Announce startup
 bashio::log.info "Starting Enhanced BLE Device Discovery..."
 

@@ -23,6 +23,8 @@ COPY rootfs /
 
 # Copy additional files
 COPY ble_scripts.yaml /ble_scripts.yaml
+COPY scan_and_display_ble_devices.yaml /scan_and_display_ble_devices.yaml
+COPY test_ble_signal.yaml /test_ble_signal.yaml
 COPY btle_dashboard.yaml /btle_dashboard.yaml
 COPY btle_combined_dashboard.yaml /btle_combined_dashboard.yaml
 COPY ble_input_text.yaml /ble_input_text.yaml
