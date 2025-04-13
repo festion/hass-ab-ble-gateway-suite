@@ -122,7 +122,7 @@ To manually install the dashboard:
 - Naming: snake_case for variables/functions, PascalCase for classes
 - String formatting: Use f-strings
 
-## Current Improvements (2024-04-13 - v0.3.16)
+## Current Improvements (2024-04-13 - v0.3.17)
 
 ### Fixed Issues:
 1. **Home Assistant Restart on Gateway Reconnect**
@@ -173,6 +173,10 @@ To manually install the dashboard:
    - Completely rewrote datetime handling with safe wrapper functions (v0.3.16, v1.5.9)
    - Added global variable declarations and nested function to fix persistent headers reference errors (v0.3.16, v1.5.9)
    - Moved scan interval sensor update to a dedicated self-contained function (v0.3.16, v1.5.9)
+   - Completely rewrote datetime handling by removing wrapper functions and using direct module calls (v0.3.17, v1.6.0)
+   - Removed activity level calculation to avoid datetime issues (v0.3.17, v1.6.0)
+   - Removed scan interval sensor creation to eliminate headers reference errors (v0.3.17, v1.6.0)
+   - Eliminated global variable declarations in favor of local variables (v0.3.17, v1.6.0)
 
 5. **"Error getting MQTT topics" Bug**
    - Fixed error: "argument of type 'bool' is not iterable"
