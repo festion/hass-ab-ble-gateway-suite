@@ -143,38 +143,7 @@ views:
               {% if signal_bars > 6 %}{% set signal_color = "green" %}
               {% elif signal_bars > 4 %}{% set signal_color = "orange" %}
               {% else %}{% set signal_color = "red" %}{% endif %}
-              | {{ name }} | {{ mac }} | {{ rssi }} dBm | <span style="color:{{ signal_color }}">{% for i in range(0, signal_bars) %}▮{% endfor %}</span> | <a href="#" onclick="(function(){
-                var macAddress = '{{ mac }}';
-                var deviceName = '{{ name }}';
-                var rssiValue = {{ rssi|int }};
-                const inputMac = document.querySelector('ha-entity-attribute-editor[title=\'Selected Device MAC\'] input, ha-textfield[title=\'Selected Device MAC\'] input, [entity-id=\'input_text.selected_ble_device\'] input');
-                const inputName = document.querySelector('ha-entity-attribute-editor[title=\'Device Name\'] input, ha-textfield[title=\'Device Name\'] input, [entity-id=\'input_text.ble_device_name\'] input');
-                
-                if (inputMac) { 
-                  inputMac.value = macAddress; 
-                  inputMac.dispatchEvent(new Event('input')); 
-                  setTimeout(() => inputMac.dispatchEvent(new Event('change')), 100);
-                }
-                
-                if (inputName) { 
-                  inputName.value = deviceName; 
-                  inputName.dispatchEvent(new Event('input')); 
-                  setTimeout(() => inputName.dispatchEvent(new Event('change')), 100);
-                }
-                
-                setTimeout(() => {
-                  hass.callService('input_text', 'set_value', {
-                    entity_id: 'input_text.selected_ble_device',
-                    value: macAddress
-                  });
-                }, 200);
-                
-                setTimeout(() => {
-                  hass.callService('script', 'ble_device_selected', {});
-                }, 500);
-                
-                return false;
-              })();">Select</a> |
+              | {{ name }} | {{ mac }} | {{ rssi }} dBm | <span style="color:{{ signal_color }}">{% for i in range(0, signal_bars) %}▮{% endfor %}</span> | <a href="#" onclick="(function(){var macAddress='{{ mac }}';var deviceName='{{ name }}';var rssiValue={{ rssi|int }};const inputMac=document.querySelector('ha-entity-attribute-editor[title=\'Selected Device MAC\'] input, ha-textfield[title=\'Selected Device MAC\'] input, [entity-id=\'input_text.selected_ble_device\'] input');const inputName=document.querySelector('ha-entity-attribute-editor[title=\'Device Name\'] input, ha-textfield[title=\'Device Name\'] input, [entity-id=\'input_text.ble_device_name\'] input');if(inputMac){inputMac.value=macAddress;inputMac.dispatchEvent(new Event('input'));setTimeout(()=>inputMac.dispatchEvent(new Event('change')),100);}if(inputName){inputName.value=deviceName;inputName.dispatchEvent(new Event('input'));setTimeout(()=>inputName.dispatchEvent(new Event('change')),100);}setTimeout(()=>{hass.callService('input_text','set_value',{entity_id:'input_text.selected_ble_device',value:macAddress});},200);setTimeout(()=>{hass.callService('script','ble_device_selected',{});},500);return false;})();">Select</a> |
               {% endfor %}
               {% else %}
               ### No Devices Discovered

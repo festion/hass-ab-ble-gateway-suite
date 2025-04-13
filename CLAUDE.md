@@ -214,6 +214,7 @@ To manually install the dashboard:
    - Fixed template syntax errors in device selection code (v0.3.23, v1.6.5)
    - Fixed type errors in BLE signal test script by proper conversion of RSSI values (v0.3.31, v1.7.3)
    - Added fallback mechanisms for missing button.bluetooth_scan entity (v0.3.31, v1.7.3)
+   - Fixed template syntax error in combined dashboard by placing JavaScript code on a single line (v0.3.32, v1.7.4)
 
 ### Implementation Details:
 1. In `__init__.py` (v0.3.0):
