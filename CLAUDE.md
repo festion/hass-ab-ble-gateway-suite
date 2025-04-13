@@ -100,7 +100,12 @@ To manually install the dashboard:
    - Ensure "Show in sidebar" is enabled
    - Check browser cache or try different browser
 
-4. **Null Data Display**:
+4. **Template Syntax Errors**:
+   - If dashboard shows errors like `TemplateSyntaxError: expected token ')', got '['`, 
+     ensure multi-line JavaScript selectors in templates are on single lines
+   - This commonly occurs in query selectors with brackets in device selection code
+
+5. **Null Data Display**:
    - Verify gateway configuration
    - Check MQTT connection
    - Inspect raw payload format
@@ -257,3 +262,4 @@ To manually install the dashboard:
    - Improved gateway status display with detailed information (v0.3.22, v1.6.4)
    - Fixed broken device selection in discovery view (v0.3.22, v1.6.4)
    - Added comprehensive help and troubleshooting information (v0.3.22, v1.6.4)
+   - Fixed template syntax errors in device selection code (v0.3.23, v1.6.5)
