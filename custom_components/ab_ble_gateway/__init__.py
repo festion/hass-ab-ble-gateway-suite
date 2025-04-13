@@ -1062,8 +1062,19 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
                             if not isinstance(domain_data, dict):
                                 _LOGGER.warning(f"DOMAIN data is not a dictionary: {type(domain_data)}")
                                 return
+                            
+                            # Some special keys like 'reconnect_in_progress' are boolean values, not entry data
+                            # We need to skip over these to prevent 'bool' is not iterable errors
+                            entry_items = {}
+                            for key, value in domain_data.items():
+                                # Only include dictionary items as they could contain scanner entries
+                                if isinstance(value, dict):
+                                    entry_items[key] = value
+                                    
+                            # Log what we found for debugging
+                            _LOGGER.debug(f"Found {len(entry_items)} valid entries to process")
                                 
-                            for entry_id, entry_data in domain_data.items():
+                            for entry_id, entry_data in entry_items.items():
                                 # Skip non-dictionary entries or entries without scanner
                                 if not isinstance(entry_data, dict):
                                     _LOGGER.debug(f"Skipping non-dictionary entry_data for {entry_id}")

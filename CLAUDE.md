@@ -122,7 +122,7 @@ To manually install the dashboard:
 - Naming: snake_case for variables/functions, PascalCase for classes
 - String formatting: Use f-strings
 
-## Current Improvements (2024-04-13 - v0.3.20)
+## Current Improvements (2024-04-13 - v0.3.21)
 
 ### Fixed Issues:
 1. **Home Assistant Restart on Gateway Reconnect**
@@ -189,6 +189,7 @@ To manually install the dashboard:
    - Fixed global MQTT message handler to properly check data types before iteration (v0.3.14)
    - Added comprehensive type checking for domain data and entry data (v0.3.14)
    - Improved device name lookup with proper type safety checks (v0.3.14)
+   - Fixed critical "argument of type 'bool' is not iterable" error in MQTT message handler (v0.3.21)
 
 6. **Device Discovery Issues**
    - Fixed issues where add-on reported finding 0 devices despite receiving valid MQTT payloads (v0.3.19, v1.6.2)
