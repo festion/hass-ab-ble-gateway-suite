@@ -1,0 +1,28 @@
+title: BLE Gateway Management
+path: ble-gateway
+icon: mdi:bluetooth
+panel: false
+cards:
+  - type: entities
+    title: BLE Gateway Status
+    entities:
+      - entity: sensor.ble_gateway_raw_data
+        name: Gateway Status
+        secondary_info: "{{ state_attr('sensor.ble_gateway_raw_data', 'gateway_id') or 'Unknown' }}"
+      - type: divider
+      - type: section
+        label: Actions
+      - type: button
+        name: Safe Reconnect
+        icon: mdi:connection
+        tap_action:
+          action: call-service
+          service: ab_ble_gateway.mqtt_reconnect
+          target: {}
+          data: {}
+      - type: button
+        name: Show Logs
+        icon: mdi:text-box-outline
+        tap_action:
+          action: navigate
+          navigation_path: /config/logs

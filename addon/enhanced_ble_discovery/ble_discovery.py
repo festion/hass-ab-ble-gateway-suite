@@ -16,7 +16,7 @@ import requests
 # Configuration
 DISCOVERIES_FILE = "/config/bluetooth_discoveries.json"
 DEFAULT_SCAN_INTERVAL = 60
-DEFAULT_GATEWAY_TOPIC = "BTLE"
+DEFAULT_GATEWAY_TOPIC = "xbg"
 
 def setup_logging(log_level):
     """Configure logging based on input level."""
