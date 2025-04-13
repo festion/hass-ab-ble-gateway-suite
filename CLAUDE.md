@@ -122,7 +122,7 @@ To manually install the dashboard:
 - Naming: snake_case for variables/functions, PascalCase for classes
 - String formatting: Use f-strings
 
-## Current Improvements (2024-04-13 - v0.3.17)
+## Current Improvements (2024-04-13 - v0.3.18)
 
 ### Fixed Issues:
 1. **Home Assistant Restart on Gateway Reconnect**
@@ -177,6 +177,7 @@ To manually install the dashboard:
    - Removed activity level calculation to avoid datetime issues (v0.3.17, v1.6.0)
    - Removed scan interval sensor creation to eliminate headers reference errors (v0.3.17, v1.6.0)
    - Eliminated global variable declarations in favor of local variables (v0.3.17, v1.6.0)
+   - Fixed template variable warnings for undefined mac_address and device_name in scripts (v0.3.18, v1.6.1)
 
 5. **"Error getting MQTT topics" Bug**
    - Fixed error: "argument of type 'bool' is not iterable"

@@ -94,7 +94,11 @@ test_ble_signal:
     # Format MAC address
     - variables:
         formatted_mac: >-
-          {{ mac_address | replace(':', '') | replace('-', '') | upper }}
+          {% if mac_address is defined %}
+            {{ mac_address | replace(':', '') | replace('-', '') | upper }}
+          {% else %}
+            UNDEFINED_MAC
+          {% endif %}
         readings: []
         duration: "{{ test_duration|int(30) }}"
     
@@ -205,9 +209,17 @@ add_ble_device:
     # Format MAC address - remove colons and convert to uppercase
     - variables:
         formatted_mac: >-
-          {{ mac_address | replace(':', '') | replace('-', '') | upper }}
+          {% if mac_address is defined %}
+            {{ mac_address | replace(':', '') | replace('-', '') | upper }}
+          {% else %}
+            UNDEFINED_MAC
+          {% endif %}
         safe_name: >-
-          {{ device_name | lower | replace(' ', '_') }}
+          {% if device_name is defined %}
+            {{ device_name | lower | replace(' ', '_') }}
+          {% else %}
+            undefined_device
+          {% endif %}
         
     # Validate inputs
     - condition: template
