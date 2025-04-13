@@ -6,8 +6,17 @@ views:
     path: main
     icon: mdi:bluetooth
     cards:
-      - type: vertical-stack
+      # Wrapper card to constrain width
+      - type: custom:layout-card
+        layout_type: custom:grid-layout
+        layout:
+          grid-template-columns: minmax(0, 1fr) minmax(auto, 900px) minmax(0, 1fr)
+          grid-template-areas: ". content ."
         cards:
+          # Main content container
+          - type: vertical-stack
+            grid-area: content
+            cards:
           # Header
           - type: markdown
             content: >
@@ -55,8 +64,17 @@ views:
     path: discovery
     icon: mdi:bluetooth-search
     cards:
-      - type: vertical-stack
+      # Wrapper card to constrain width
+      - type: custom:layout-card
+        layout_type: custom:grid-layout
+        layout:
+          grid-template-columns: minmax(0, 1fr) minmax(auto, 900px) minmax(0, 1fr)
+          grid-template-areas: ". content ."
         cards:
+          # Main content container
+          - type: vertical-stack
+            grid-area: content
+            cards:
           - type: entities
             title: Device Discovery
             entities:
@@ -294,8 +312,17 @@ views:
     path: managed
     icon: mdi:format-list-bulleted
     cards:
-      - type: vertical-stack
+      # Wrapper card to constrain width
+      - type: custom:layout-card
+        layout_type: custom:grid-layout
+        layout:
+          grid-template-columns: minmax(0, 1fr) minmax(auto, 900px) minmax(0, 1fr)
+          grid-template-areas: ". content ."
         cards:
+          # Main content container
+          - type: vertical-stack
+            grid-area: content
+            cards:
           - type: custom:mushroom-template-card
             primary: "{{state_attr('sensor.ble_gateway_raw_data', 'gateway_id') or 'BLE Gateway'}}"
             secondary: "Status: {{states('sensor.ble_gateway_raw_data')}}"
@@ -384,8 +411,17 @@ views:
     path: gateway
     icon: mdi:router-wireless
     cards:
-      - type: vertical-stack
+      # Wrapper card to constrain width
+      - type: custom:layout-card
+        layout_type: custom:grid-layout
+        layout:
+          grid-template-columns: minmax(0, 1fr) minmax(auto, 900px) minmax(0, 1fr)
+          grid-template-areas: ". content ."
         cards:
+          # Main content container
+          - type: vertical-stack
+            grid-area: content
+            cards:
           - type: entities
             title: BLE Gateway Status
             entities:
