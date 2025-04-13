@@ -3,6 +3,8 @@
 ## Overview
 This Home Assistant add-on provides advanced Bluetooth Low Energy (BLE) device discovery and management with a user-friendly dashboard interface.
 
+⚠️ **IMPORTANT NOTE**: This add-on works in conjunction with the AB BLE Gateway Integration, but they must be installed separately. Simply installing the integration via HACS will NOT automatically install this add-on.
+
 ## Features
 - Continuous BLE device scanning
 - User-friendly discovery dashboard
@@ -16,12 +18,23 @@ This Home Assistant add-on provides advanced Bluetooth Low Energy (BLE) device d
 - Energy-efficient operation
 - Comprehensive device categorization with 12 device types
 
-## Setup Instructions
+## Complete Installation Process
 
-### 1. Install the Add-on
-1. Add this repository to your Home Assistant Add-on Store
-2. Install the "Enhanced BLE Device Discovery" add-on
-3. Configure and start the add-on
+### 1. Install the AB BLE Gateway Integration
+1. Install the "April Brother BLE Gateway - Enhanced" integration through HACS
+2. Restart Home Assistant
+3. Add the integration through the Home Assistant UI (Configuration → Integrations → Add Integration)
+4. Select "April Brother BLE Gateway - Enhanced" and follow the setup instructions
+
+### 2. Install This Add-on
+1. In Home Assistant, navigate to **Settings** → **Add-ons** → **Add-on Store**
+2. Click the three-dot menu (⋮) in the top right and select **Repositories**
+3. Add this repository URL: `https://github.com/festion/hass-ab-ble-gateway-suite`
+4. Click **Add** and then **Close**
+5. The "Enhanced BLE Device Discovery" add-on should now appear in the add-on store
+6. Click on it and then click **Install**
+7. Configure and start the add-on
+8. Access the dashboard at: /lovelace/ble-utility
 
 ### 2. Configure Input Helpers
 This add-on requires several input helpers to function correctly. After installing the add-on, you'll need to add the following to your Home Assistant configuration:
