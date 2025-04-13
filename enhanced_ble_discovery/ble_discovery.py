@@ -1194,7 +1194,7 @@ def collect_system_diagnostics():
     """
     diagnostics = {
         "timestamp": datetime.now().isoformat(),
-        "version": "1.5.6",  # Make sure to update this when changing versions
+        "version": "1.5.7",  # Make sure to update this when changing versions
         "python_version": ".".join(map(str, sys.version_info[:3])),
         "platform": sys.platform,
         "environment": {}
@@ -1320,8 +1320,7 @@ def get_home_assistant_activity_level():
         }
         
         # Get history for the last 15 minutes for common activity entities
-        # Using proper import of datetime.timedelta at the top of file
-        from datetime import timedelta
+        # timedelta is already imported at the top of the file
         fifteen_minutes_ago = (datetime.now() - timedelta(minutes=15)).isoformat()
         
         # Try to get state changes history
@@ -1350,7 +1349,7 @@ def get_home_assistant_activity_level():
             return activity_level
     
     except Exception as e:
-        logging.debug(f"Error getting activity level: {e}")
+        logging.error(f"Error getting activity level: {e}")
     
     # Default to medium activity if we can't determine
     return 50
@@ -1435,7 +1434,7 @@ def main(log_level, scan_interval, gateway_topic=DEFAULT_GATEWAY_TOPIC):
             
             # Create a sensor to show current scan settings
             try:
-                # Using pre-defined headers to avoid error
+                # Always define headers before using them
                 headers = {
                     "Authorization": f"Bearer {os.environ.get('SUPERVISOR_TOKEN', '')}",
                     "Content-Type": "application/json"
@@ -1460,7 +1459,7 @@ def main(log_level, scan_interval, gateway_topic=DEFAULT_GATEWAY_TOPIC):
                     json=sensor_data
                 )
             except Exception as e:
-                logging.debug(f"Error updating scan interval sensor: {e}")
+                logging.error(f"Error updating scan interval sensor: {e}")
             
         except Exception as e:
             logging.error(f"Discovery error: {e}")

@@ -122,7 +122,7 @@ To manually install the dashboard:
 - Naming: snake_case for variables/functions, PascalCase for classes
 - String formatting: Use f-strings
 
-## Current Improvements (2024-04-13 - v0.3.12)
+## Current Improvements (2024-04-13 - v0.3.13)
 
 ### Fixed Issues:
 1. **Home Assistant Restart on Gateway Reconnect**
@@ -166,6 +166,7 @@ To manually install the dashboard:
    - Completely rebuilt verification dashboard using entities card to avoid Jinja2 template errors (v0.3.10, v1.5.4)
    - Fixed persistent datetime.timedelta and headers reference issues in BLE Discovery add-on (v0.3.11, v1.5.5)
    - Fixed remaining templating error in atomic dashboard by replacing Jinja loop with entities card (v0.3.12, v1.5.6)
+   - Comprehensively fixed persistent errors in BLE Discovery add-on by removing redundant timedelta import and ensuring proper headers initialization (v0.3.13, v1.5.7)
 
 5. **"Error getting MQTT topics" Bug**
    - Fixed error: "argument of type 'bool' is not iterable"
