@@ -1371,7 +1371,7 @@ def collect_system_diagnostics():
     """
     diagnostics = {
         "timestamp": datetime.datetime.now().isoformat(),
-        "version": "1.6.3",  # Make sure to update this when changing versions
+        "version": "1.6.4",  # Make sure to update this when changing versions
         "python_version": ".".join(map(str, sys.version_info[:3])),
         "platform": sys.platform,
         "environment": {}

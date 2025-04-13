@@ -122,7 +122,7 @@ To manually install the dashboard:
 - Naming: snake_case for variables/functions, PascalCase for classes
 - String formatting: Use f-strings
 
-## Current Improvements (2024-04-13 - v0.3.21)
+## Current Improvements (2024-04-13 - v0.3.22)
 
 ### Fixed Issues:
 1. **Home Assistant Restart on Gateway Reconnect**
@@ -239,7 +239,7 @@ To manually install the dashboard:
    - Ensured compatibility with different entity availability states
    - Added conditional display based on entity availability
 
-5. Enhanced BLE Discovery Add-on (v0.3.19-20, v1.6.2-3):
+5. Enhanced BLE Discovery Add-on (v0.3.19-22, v1.6.2-4):
    - Fixed critical issue where add-on reported "Total discovered devices: 0" despite valid MQTT payload
    - Enhanced `get_ble_gateway_data()` function to detect and handle AprilBrother Gateway format
    - Improved `process_ble_gateway_data()` function to properly extract device information from nested arrays
@@ -252,3 +252,8 @@ To manually install the dashboard:
    - Added detailed debugging output showing format of device data found in sensors (v1.6.3)
    - Improved entity search to scan any sensor entity that might contain device data in its state (v1.6.3)
    - Added direct MQTT sensor scanning that analyzes the first 20 MQTT sensors for device data (v1.6.3)
+   - Enhanced combined dashboard with improved device selection functionality (v0.3.22, v1.6.4)
+   - Added visual RSSI signal strength indicators and explanation (v0.3.22, v1.6.4)
+   - Improved gateway status display with detailed information (v0.3.22, v1.6.4)
+   - Fixed broken device selection in discovery view (v0.3.22, v1.6.4)
+   - Added comprehensive help and troubleshooting information (v0.3.22, v1.6.4)

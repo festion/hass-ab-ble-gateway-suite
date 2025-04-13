@@ -55,71 +55,206 @@ views:
     path: discovery
     icon: mdi:bluetooth-search
     cards:
-      - type: entities
-        title: Device Discovery
-        entities:
-          - type: conditional
-            conditions:
-              - entity: input_button.bluetooth_scan
-                state_not: "unavailable"
-            row:
-              entity: input_button.bluetooth_scan
-              name: Scan for BLE Devices
-              icon: mdi:bluetooth-search
-          - type: conditional
-            conditions:
-              - entity: button.bluetooth_scan
-                state_not: "unavailable"
-              - entity: input_button.bluetooth_scan
-                state: "unavailable"
-            row:
-              entity: button.bluetooth_scan
-              name: Scan for BLE Devices
-              icon: mdi:bluetooth-search
-          - type: conditional
-            conditions:
-              - entity: script.bluetooth_scan
-                state_not: "unavailable"
-              - entity: button.bluetooth_scan
-                state: "unavailable"
-              - entity: input_button.bluetooth_scan
-                state: "unavailable"
-            row:
-              entity: script.bluetooth_scan
-              name: Scan for BLE Devices
-              icon: mdi:bluetooth-search
-          - entity: input_text.discovered_ble_devices
-            name: Discovered Devices (JSON)
-          - type: divider
-          - type: section
-            label: Detected BLE Devices
+      - type: vertical-stack
+        cards:
+          - type: entities
+            title: Device Discovery
+            entities:
+              - type: conditional
+                conditions:
+                  - entity: input_button.bluetooth_scan
+                    state_not: "unavailable"
+                row:
+                  entity: input_button.bluetooth_scan
+                  name: Scan for BLE Devices
+                  icon: mdi:bluetooth-search
+              - type: conditional
+                conditions:
+                  - entity: button.bluetooth_scan
+                    state_not: "unavailable"
+                  - entity: input_button.bluetooth_scan
+                    state: "unavailable"
+                row:
+                  entity: button.bluetooth_scan
+                  name: Scan for BLE Devices
+                  icon: mdi:bluetooth-search
+              - type: conditional
+                conditions:
+                  - entity: script.bluetooth_scan
+                    state_not: "unavailable"
+                  - entity: button.bluetooth_scan
+                    state: "unavailable"
+                  - entity: input_button.bluetooth_scan
+                    state: "unavailable"
+                row:
+                  entity: script.bluetooth_scan
+                  name: Scan for BLE Devices
+                  icon: mdi:bluetooth-search
+              - type: button
+                name: Scan and List Devices
+                icon: mdi:refresh
+                tap_action:
+                  action: call-service
+                  service: script.scan_and_display_ble_devices
+                  
+          - type: custom:mushroom-template-card
+            primary: "{{state_attr('sensor.ble_gateway_raw_data', 'gateway_id') or 'BLE Gateway'}}"
+            secondary: "Connected to MQTT topic: {{state_attr('ab_ble_gateway.ab_ble_gateway', 'mqtt_topic') or 'xbg'}}"
+            icon: mdi:router-wireless
+            entity: sensor.ble_gateway_raw_data
+            fill_container: true
+            layout: vertical
+            tap_action:
+              action: navigate
+              navigation_path: /ble-utility/gateway
+            
           - type: markdown
+            title: Discovered Devices
             content: |-
               {% set device_json = states('input_text.discovered_ble_devices') %}
               {% set devices = device_json | from_json %}
               {% set device_map = state_attr('sensor.ble_gateway_raw_data', 'device_map') or {} %}
               
               {% if devices|length > 0 %}
-              ### Discovered Devices
-              
-              | Device | MAC | RSSI | Select |
-              | ------ | --- | ---- | ------ |
+              | Device | MAC | RSSI | Signal | Select |
+              | ------ | --- | ---- | ------ | ------ |
               {% for mac, rssi in devices.items() %}
-              | {{ device_map[mac|replace(':', '')] if mac|replace(':', '') in device_map else mac }} | {{ mac }} | {{ rssi }} dBm | [Select](###) |
+              {% set clean_mac = mac|replace(':', '')|upper %}
+              {% set name = device_map[clean_mac] if clean_mac in device_map else device_map[mac] if mac in device_map else (mac|upper|replace(':', '')[-6:]) %}
+              {% set signal_bars = ((rssi|int + 100) / 10)|int %}
+              {% if signal_bars > 6 %}{% set signal_color = "green" %}
+              {% elif signal_bars > 4 %}{% set signal_color = "orange" %}
+              {% else %}{% set signal_color = "red" %}{% endif %}
+              | {{ name }} | {{ mac }} | {{ rssi }} dBm | <span style="color:{{ signal_color }}">{% for i in range(0, signal_bars) %}▮{% endfor %}</span> | <a href="#" onclick="(function(){
+                var macAddress = '{{ mac }}';
+                var deviceName = '{{ name }}';
+                var rssiValue = {{ rssi|int }};
+                const inputMac = document.querySelector('ha-entity-attribute-editor[title=\'Selected Device MAC\'] input, 
+                                                      ha-textfield[title=\'Selected Device MAC\'] input, 
+                                                      [entity-id=\'input_text.selected_ble_device\'] input');
+                const inputName = document.querySelector('ha-entity-attribute-editor[title=\'Device Name\'] input,
+                                                       ha-textfield[title=\'Device Name\'] input,
+                                                       [entity-id=\'input_text.ble_device_name\'] input');
+                
+                if (inputMac) { 
+                  inputMac.value = macAddress; 
+                  inputMac.dispatchEvent(new Event('input')); 
+                  setTimeout(() => inputMac.dispatchEvent(new Event('change')), 100);
+                }
+                
+                if (inputName) { 
+                  inputName.value = deviceName; 
+                  inputName.dispatchEvent(new Event('input')); 
+                  setTimeout(() => inputName.dispatchEvent(new Event('change')), 100);
+                }
+                
+                setTimeout(() => {
+                  hass.callService('input_text', 'set_value', {
+                    entity_id: 'input_text.selected_ble_device',
+                    value: macAddress
+                  });
+                }, 200);
+                
+                setTimeout(() => {
+                  hass.callService('script', 'ble_device_selected', {});
+                }, 500);
+                
+                return false;
+              })();">Select</a> |
               {% endfor %}
               {% else %}
               ### No Devices Discovered
               Press "Scan for BLE Devices" to search for nearby Bluetooth devices.
               {% endif %}
-          - type: button
-            name: Scan and List Devices
-            icon: mdi:refresh
-            tap_action:
-              action: call-service
-              service: script.scan_and_display_ble_devices
-          - type: divider
-          - type: section
-            label: Selected Device
+              
+      - type: custom:mushroom-template-card
+        primary: Signal Strength Information
+        secondary: RSSI values indicate how close the device is to the gateway
+        icon: mdi:signal-variant
+        layout: vertical
+        card_mod:
+          style: |
+            ha-card {
+              --primary-text-color: var(--rgb-primary-text-color);
+              margin-top: 1em;
+              margin-bottom: 1em;
+            }
+      
+      - type: vertical-stack
+        cards:
+          - type: custom:bar-card
+            title: Signal Strength Explanation
+            entity: sensor.ble_gateway_raw_data
+            title_position: inside
+            positions:
+              icon: outside
+              title: inside
+              value: inside
+            unit_of_measurement: dBm
+            severity:
+              - color: '#ff0000'
+                value: -95
+              - color: '#ffaa00'
+                value: -85
+              - color: '#00ff00'
+                value: -65
+            max: -40
+            min: -100
+            target: -100
+            height: 40px
+            width: 90%
+            entities:
+              - name: "Weak Signal (-100 to -90 dBm)"
+                entity: sensor.ble_gateway_raw_data
+                value: -95
+                icon: mdi:signal-cellular-1
+                card_mod:
+                  style: |
+                    ha-card {
+                      --primary-text-color: white;
+                    }
+              - name: "Moderate Signal (-89 to -80 dBm)"
+                entity: sensor.ble_gateway_raw_data
+                value: -85
+                icon: mdi:signal-cellular-2
+                card_mod:
+                  style: |
+                    ha-card {
+                      --primary-text-color: white;
+                    }
+              - name: "Strong Signal (-79 to -65 dBm)"
+                entity: sensor.ble_gateway_raw_data
+                value: -65
+                icon: mdi:signal-cellular-3
+                card_mod:
+                  style: |
+                    ha-card {
+                      --primary-text-color: white;
+                    }
+              - name: "Excellent Signal (> -65 dBm)"
+                entity: sensor.ble_gateway_raw_data
+                value: -50
+                icon: mdi:signal-cellular-3
+                card_mod:
+                  style: |
+                    ha-card {
+                      --primary-text-color: white;
+                    }
+                    
+          - type: markdown
+            content: >
+              **RSSI Guidelines:**
+              
+              * **-40 to -65 dBm**: Excellent signal (very close)
+              * **-66 to -80 dBm**: Good signal (reliable connection)
+              * **-81 to -90 dBm**: Fair signal (may lose connection)
+              * **-91 to -100 dBm**: Poor signal (unreliable)
+              
+              Higher numbers (closer to 0) indicate stronger signals.
+      
+      - type: entities
+        title: Selected Device
+        entities:
           - entity: input_text.selected_ble_device
             name: Selected Device MAC
           - entity: input_text.ble_device_name
@@ -130,6 +265,9 @@ views:
             name: RSSI Threshold
           - entity: input_text.ble_device_icon
             name: Icon (MDI name)
+          - type: divider
+          - type: section
+            label: Actions
           - type: button
             name: Add Selected Device
             icon: mdi:plus-circle
@@ -156,45 +294,190 @@ views:
     path: managed
     icon: mdi:format-list-bulleted
     cards:
-      - type: entities
-        title: Managed BLE Devices
-        entities:
-          - entity: sensor.ble_gateway_raw_data
-            name: BLE Gateway Status
-            secondary_info: "{{ state_attr('sensor.ble_gateway_raw_data', 'gateway_id') or 'Unknown' }}"
+      - type: vertical-stack
+        cards:
+          - type: custom:mushroom-template-card
+            primary: "{{state_attr('sensor.ble_gateway_raw_data', 'gateway_id') or 'BLE Gateway'}}"
+            secondary: "Status: {{states('sensor.ble_gateway_raw_data')}}"
+            icon: mdi:router-wireless
+            entity: sensor.ble_gateway_raw_data
+            fill_container: true
+            tap_action:
+              action: navigate
+              navigation_path: /ble-utility/gateway
+            
           - type: conditional
             conditions:
-              - entity: input_text.discovered_ble_devices
-                state_not: "{}"
-            row:
-              entity: script.scan_and_display_ble_devices
-              name: Refresh Device List
-              icon: mdi:refresh
-          
+              - condition: template
+                value_template: "{{ state_attr('sensor.ble_gateway_raw_data', 'device_map') is defined and state_attr('sensor.ble_gateway_raw_data', 'device_map')|length > 0 }}"
+            card:
+              type: entities
+              title: Mapped Devices
+              entities:
+                - type: section
+                  label: "Device Mapping from Gateway"
+                - type: custom:template-entity-row
+                  content: >
+                    {% set device_map = state_attr('sensor.ble_gateway_raw_data', 'device_map') %}
+                    {% if device_map %}
+                      {% for mac, name in device_map.items() %}
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                          <div>{{ name }}</div>
+                          <div style="color: var(--secondary-text-color)">{{ mac }}</div>
+                        </div>
+                      {% endfor %}
+                    {% else %}
+                      No mapped devices found.
+                    {% endif %}
+            
+      - type: entities
+        title: Managed BLE Devices
+        show_header_toggle: false
+        entities:
+          - type: section
+            label: BLE Sensors
+          - type: entity-filter
+            entities:
+              - sensor
+            state_filter:
+              - "home"
+              - "not_home"
+              - "unavailable"
+              - "unknown"
+            card:
+              type: entities
+              title: BLE Presence Sensors
+              show_empty: false
+              show_header_toggle: false
+            filter:
+              include:
+                - entity_id: "*bt_presence*"
+                - entity_id: "*ble_presence*"
+          - type: entity-filter
+            entities:
+              - sensor
+            state_filter:
+              - operator: ">="
+                value: -100
+              - operator: "<="
+                value: 100
+              - "unavailable"
+              - "unknown"
+            card:
+              type: entities
+              title: BLE Temperature Sensors
+              show_empty: false
+              show_header_toggle: false
+            filter:
+              include:
+                - entity_id: "*bt_temp*"
+                - entity_id: "*ble_temp*"
+                
+          - type: button
+            name: Refresh Device List
+            icon: mdi:refresh
+            tap_action:
+              action: call-service
+              service: script.scan_and_display_ble_devices
+              
   - title: Gateway Management
     path: gateway
     icon: mdi:router-wireless
     cards:
-      - type: entities
-        title: BLE Gateway Management
-        entities:
-          - entity: sensor.ble_gateway_raw_data
-            name: Gateway Status
-            secondary_info: "{{ state_attr('sensor.ble_gateway_raw_data', 'gateway_id') or 'Unknown' }}"
-          - type: divider
-          - type: section
-            label: Actions
-          - type: button
-            name: Safe Reconnect
-            icon: mdi:connection
-            tap_action:
-              action: call-service
-              service: ab_ble_gateway.mqtt_reconnect
-              target: {}
-              data: {}
-          - type: button
-            name: Show Logs
-            icon: mdi:text-box-outline
-            tap_action:
-              action: navigate
-              navigation_path: /config/logs
+      - type: vertical-stack
+        cards:
+          - type: entities
+            title: BLE Gateway Status
+            entities:
+              - entity: sensor.ble_gateway_raw_data
+                name: Gateway Status
+                secondary_info: "{{ state_attr('sensor.ble_gateway_raw_data', 'gateway_id') or 'Unknown' }}"
+              - type: attribute
+                entity: sensor.ble_gateway_raw_data
+                attribute: gateway_id
+                name: Gateway ID
+              - type: attribute
+                entity: sensor.ble_gateway_raw_data
+                attribute: last_scan
+                name: Last Scan Time
+                format: datetime
+              - type: attribute
+                entity: sensor.ble_gateway_raw_data
+                attribute: rssi
+                name: Gateway RSSI
+                suffix: dBm
+              - type: attribute
+                entity: sensor.ble_gateway_raw_data
+                attribute: gateway_status
+                name: Connection Status
+              - type: conditional
+                conditions:
+                  - condition: template
+                    value_template: "{{ state_attr('sensor.ble_gateway_raw_data', 'ip') is defined }}"
+                row:
+                  type: attribute
+                  entity: sensor.ble_gateway_raw_data
+                  attribute: ip
+                  name: Gateway IP
+              - type: conditional
+                conditions:
+                  - condition: template
+                    value_template: "{{ state_attr('sensor.ble_gateway_raw_data', 'mac') is defined }}"
+                row:
+                  type: attribute
+                  entity: sensor.ble_gateway_raw_data
+                  attribute: mac
+                  name: Gateway MAC
+                  
+          - type: entities
+            title: Gateway Statistics
+            entities:
+              - type: conditional
+                conditions:
+                  - condition: template
+                    value_template: "{{ state_attr('sensor.ble_gateway_raw_data', 'devices') is defined }}"
+                row:
+                  type: section
+                  label: Detected Devices
+              - type: conditional
+                conditions:
+                  - condition: template
+                    value_template: "{{ state_attr('sensor.ble_gateway_raw_data', 'devices') is defined }}"
+                row:
+                  type: custom:template-entity-row
+                  entity: sensor.ble_gateway_raw_data
+                  name: Device Count
+                  state: "{{ (state_attr('sensor.ble_gateway_raw_data', 'devices')|default([]))|length }}"
+              - type: divider
+              - type: section
+                label: Actions
+              - type: button
+                name: Safe Reconnect
+                icon: mdi:connection
+                tap_action:
+                  action: call-service
+                  service: ab_ble_gateway.mqtt_reconnect
+                  target: {}
+                  data: {}
+              - type: button
+                name: Show Logs
+                icon: mdi:text-box-outline
+                tap_action:
+                  action: navigate
+                  navigation_path: /config/logs
+          
+          - type: markdown
+            title: Help & Troubleshooting
+            content: >
+              ### Troubleshooting Steps
+              
+              1. If no devices are being detected, check that the gateway is online and connected to your network.
+              
+              2. If devices show in raw data but not in the sensor, try pressing the "Safe Reconnect" button to
+                 reestablish the MQTT connection.
+              
+              3. For more advanced troubleshooting, check the logs for any error messages from the BLE gateway 
+                 integration.
+              
+              4. Make sure your AprilBrother BLE Gateway is configured to publish to the correct MQTT topic that
+                 matches your configuration.
