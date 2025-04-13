@@ -109,6 +109,12 @@ To manually install the dashboard:
    - Verify gateway configuration
    - Check MQTT connection
    - Inspect raw payload format
+   
+6. **Script Issues**:
+   - If you see errors like `TypeError: unsupported operand type(s) for +: 'int' and 'str'` in scripts,
+     ensure proper type conversion using filters like `|int(-100)` when working with RSSI values
+   - If errors mention `Referenced entities button.bluetooth_scan are missing`, the component 
+     includes fallback mechanisms to handle missing button entities
 
 ## Key Concepts
 - AprilBrother BLE Gateway integration
@@ -205,6 +211,9 @@ To manually install the dashboard:
    - Further enhanced discovery by checking all sensor entities (not just those with specific names) (v0.3.20, v1.6.3)
    - Added detailed debugging of all MQTT entities to show device formats (v0.3.20, v1.6.3)
    - Added direct scanning of MQTT sensor states for device data regardless of entity naming (v0.3.20, v1.6.3)
+   - Fixed template syntax errors in device selection code (v0.3.23, v1.6.5)
+   - Fixed type errors in BLE signal test script by proper conversion of RSSI values (v0.3.31, v1.7.3)
+   - Added fallback mechanisms for missing button.bluetooth_scan entity (v0.3.31, v1.7.3)
 
 ### Implementation Details:
 1. In `__init__.py` (v0.3.0):

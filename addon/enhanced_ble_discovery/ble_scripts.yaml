@@ -12,10 +12,26 @@ scan_and_display_ble_devices:
         message: "Starting Bluetooth scan..."
         notification_id: "ble_scan"
     
-    # Perform the BLE scan
-    - service: button.press
-      target:
-        entity_id: button.bluetooth_scan
+    # Perform the BLE scan using available methods
+    - choose:
+        - conditions:
+            - condition: template
+              value_template: "{{ is_state_attr('button.bluetooth_scan', 'friendly_name', 'Bluetooth Scan') }}"
+          sequence:
+            - service: button.press
+              target:
+                entity_id: button.bluetooth_scan
+        - conditions:
+            - condition: template
+              value_template: "{{ is_state_attr('script.bluetooth_scan', 'friendly_name', 'Bluetooth Scan') }}"
+          sequence:
+            - service: script.turn_on
+              target:
+                entity_id: script.bluetooth_scan
+      default:
+        - service: homeassistant.update_entity
+          target:
+            entity_id: sensor.ble_gateway_raw_data
     
     # Wait for scan to complete
     - delay: 
@@ -113,9 +129,26 @@ test_ble_signal:
     - repeat:
         count: "{{ (duration / 5)|int(6) }}"
         sequence:
-          - service: button.press
-            target:
-              entity_id: button.bluetooth_scan
+          # Try standard button first, then script
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ is_state_attr('button.bluetooth_scan', 'friendly_name', 'Bluetooth Scan') }}"
+                sequence:
+                  - service: button.press
+                    target:
+                      entity_id: button.bluetooth_scan
+              - conditions:
+                  - condition: template
+                    value_template: "{{ is_state_attr('script.bluetooth_scan', 'friendly_name', 'Bluetooth Scan') }}"
+                sequence:
+                  - service: script.turn_on
+                    target:
+                      entity_id: script.bluetooth_scan
+            default:
+              - service: homeassistant.update_entity
+                target:
+                  entity_id: sensor.ble_gateway_raw_data
           
           - delay:
               seconds: 2
@@ -134,7 +167,8 @@ test_ble_signal:
                   -100
                 {% endif %}
               readings: >
-                {{ readings + [current_rssi] }}
+                {% set current = current_rssi|int(-100) %}
+                {{ readings + [current] }}
               
           - delay:
               seconds: 3
