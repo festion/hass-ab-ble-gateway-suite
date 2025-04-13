@@ -42,6 +42,13 @@ if [ ! -f "/config/dashboards/btle_dashboard.yaml" ] || [ ! -f "/config/dashboar
     if [ ! -f "/config/dashboards/btle_combined_dashboard.yaml" ] && [ -f "/btle_combined_dashboard.yaml" ]; then
         cp /btle_combined_dashboard.yaml /config/dashboards/
         bashio::log.info "Installed enhanced combined BLE dashboard - access it at /lovelace/ble-utility"
+        
+        # Add a persistent notification to inform the user about the dashboard
+        curl -s -X POST \
+             -H "Authorization: Bearer ${SUPERVISOR_TOKEN}" \
+             -H "Content-Type: application/json" \
+             -d '{"message": "BLE Utility Dashboard has been installed at /dashboards/ble-utility. To add it to your sidebar, go to Configuration > Dashboards, find BLE Utility, click the menu icon, and select Show in Sidebar.", "title": "BLE Dashboard Installed", "notification_id": "ble_dashboard_installed"}' \
+             http://supervisor/core/api/services/persistent_notification/create
     fi
 fi
 

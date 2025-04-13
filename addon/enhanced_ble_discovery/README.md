@@ -35,6 +35,11 @@ This Home Assistant add-on provides advanced Bluetooth Low Energy (BLE) device d
 6. Click on it and then click **Install**
 7. Configure and start the add-on
 8. Access the dashboard at: /lovelace/ble-utility
+9. To add the dashboard to your sidebar:
+   - Go to **Configuration** → **Dashboards**
+   - Find "BLE Utility" in the list
+   - Click the three dots menu (⋮) to the right of it
+   - Select "Show in sidebar"
 
 ### 2. Configure Input Helpers
 This add-on requires several input helpers to function correctly. After installing the add-on, you'll need to add the following to your Home Assistant configuration:

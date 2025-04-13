@@ -50,6 +50,11 @@ The Enhanced BLE Discovery add-on provides a user-friendly dashboard and managem
 6. Click on it and then click **Install**
 7. After installation, click **Start** to run the add-on
 8. The dashboard will be available at: /lovelace/ble-utility
+9. To add the dashboard to your sidebar:
+   - Go to **Configuration** → **Dashboards**
+   - Find "BLE Utility" in the list
+   - Click the three dots menu (⋮) to the right of it
+   - Select "Show in sidebar"
 
 ## Setup Requirements
 
