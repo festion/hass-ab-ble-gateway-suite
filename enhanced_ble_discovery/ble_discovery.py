@@ -1188,13 +1188,77 @@ def setup_required_entities():
     for entity_id in required_entities:
         check_input_text_exists(entity_id)
 
+def create_dashboard_entities():
+    """
+    Create all the required input text entities for the dashboard.
+    """
+    dashboard_entities = [
+        {
+            "entity_id": "input_text.new_ble_device_name",
+            "name": "New BLE Device Name", 
+            "max": 255,
+            "initial": "",
+            "icon": "mdi:rename-box"
+        },
+        {
+            "entity_id": "input_text.new_ble_device_mac",
+            "name": "New BLE Device MAC Address", 
+            "max": 255,
+            "initial": "",
+            "icon": "mdi:bluetooth"
+        },
+        {
+            "entity_id": "input_text.new_ble_device_category",
+            "name": "New BLE Device Category", 
+            "max": 255,
+            "initial": "Other",
+            "icon": "mdi:shape"
+        }
+    ]
+    
+    # Create or update each entity
+    for entity_config in dashboard_entities:
+        try:
+            headers = {
+                "Authorization": f"Bearer {os.environ.get('SUPERVISOR_TOKEN', '')}",
+                "Content-Type": "application/json"
+            }
+            
+            entity_id = entity_config["entity_id"]
+            
+            # Check if entity exists
+            response = requests.get(
+                f"http://supervisor/core/api/states/{entity_id}",
+                headers=headers
+            )
+            
+            if response.status_code == 404:
+                # Create the entity
+                logging.info(f"Creating missing dashboard entity: {entity_id}")
+                
+                create_response = requests.post(
+                    "http://supervisor/core/api/services/input_text/create",
+                    headers=headers,
+                    json=entity_config
+                )
+                
+                if create_response.status_code < 200 or create_response.status_code >= 300:
+                    logging.error(f"Failed to create {entity_id}: {create_response.status_code} - {create_response.text}")
+                else:
+                    logging.info(f"Successfully created {entity_id}")
+            else:
+                logging.debug(f"Dashboard entity {entity_id} already exists")
+                
+        except Exception as e:
+            logging.error(f"Error creating dashboard entity {entity_config['entity_id']}: {e}")
+
 def collect_system_diagnostics():
     """
     Collect system diagnostic information to help with troubleshooting.
     """
     diagnostics = {
         "timestamp": datetime.now().isoformat(),
-        "version": "1.5.7",  # Make sure to update this when changing versions
+        "version": "1.5.8",  # Make sure to update this when changing versions
         "python_version": ".".join(map(str, sys.version_info[:3])),
         "platform": sys.platform,
         "environment": {}
@@ -1320,8 +1384,9 @@ def get_home_assistant_activity_level():
         }
         
         # Get history for the last 15 minutes for common activity entities
-        # timedelta is already imported at the top of the file
-        fifteen_minutes_ago = (datetime.now() - timedelta(minutes=15)).isoformat()
+        # Create a time 15 minutes ago
+        import datetime as dt
+        fifteen_minutes_ago = (dt.datetime.now() - dt.timedelta(minutes=15)).isoformat()
         
         # Try to get state changes history
         response = requests.get(
@@ -1374,6 +1439,9 @@ def main(log_level, scan_interval, gateway_topic=DEFAULT_GATEWAY_TOPIC):
     # Ensure required entities exist
     setup_required_entities()
     
+    # Create additional input text entities if needed
+    create_dashboard_entities()
+    
     create_home_assistant_notification(
         "BLE Discovery Add-on",
         "BLE Discovery Add-on has started with adaptive scanning. Use the BLE Dashboard to manage devices.",
@@ -1386,6 +1454,12 @@ def main(log_level, scan_interval, gateway_topic=DEFAULT_GATEWAY_TOPIC):
     # Track discovered devices for adaptive scanning
     last_devices = []
     
+    # Define auth headers once and reuse
+    headers = {
+        "Authorization": f"Bearer {os.environ.get('SUPERVISOR_TOKEN', '')}",
+        "Content-Type": "application/json"
+    }
+    
     while True:
         try:
             # Get current system activity level
@@ -1397,6 +1471,7 @@ def main(log_level, scan_interval, gateway_topic=DEFAULT_GATEWAY_TOPIC):
             
             # Update the BLE gateway sensor with discovered devices if we have any
             if discovered_devices:
+                # Redefine headers inside the try block to ensure they're always available
                 headers = {
                     "Authorization": f"Bearer {os.environ.get('SUPERVISOR_TOKEN', '')}",
                     "Content-Type": "application/json"
@@ -1434,7 +1509,7 @@ def main(log_level, scan_interval, gateway_topic=DEFAULT_GATEWAY_TOPIC):
             
             # Create a sensor to show current scan settings
             try:
-                # Always define headers before using them
+                # Always redefine headers inside the try block to ensure they're always available
                 headers = {
                     "Authorization": f"Bearer {os.environ.get('SUPERVISOR_TOKEN', '')}",
                     "Content-Type": "application/json"
