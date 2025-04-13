@@ -122,7 +122,7 @@ To manually install the dashboard:
 - Naming: snake_case for variables/functions, PascalCase for classes
 - String formatting: Use f-strings
 
-## Current Improvements (2024-04-13 - v0.3.18)
+## Current Improvements (2024-04-13 - v0.3.19)
 
 ### Fixed Issues:
 1. **Home Assistant Restart on Gateway Reconnect**
@@ -178,6 +178,7 @@ To manually install the dashboard:
    - Removed scan interval sensor creation to eliminate headers reference errors (v0.3.17, v1.6.0)
    - Eliminated global variable declarations in favor of local variables (v0.3.17, v1.6.0)
    - Fixed template variable warnings for undefined mac_address and device_name in scripts (v0.3.18, v1.6.1)
+   - Fixed device discovery issues where add-on reported "0 devices" despite valid MQTT payload (v0.3.19, v1.6.2)
 
 5. **"Error getting MQTT topics" Bug**
    - Fixed error: "argument of type 'bool' is not iterable"
@@ -187,6 +188,13 @@ To manually install the dashboard:
    - Fixed global MQTT message handler to properly check data types before iteration (v0.3.14)
    - Added comprehensive type checking for domain data and entry data (v0.3.14)
    - Improved device name lookup with proper type safety checks (v0.3.14)
+
+6. **Device Discovery Issues**
+   - Fixed issues where add-on reported finding 0 devices despite receiving valid MQTT payloads (v0.3.19, v1.6.2)
+   - Enhanced AprilBrother Gateway payload format detection and processing (v0.3.19, v1.6.2)
+   - Improved handling of JSON payload format containing nested device arrays (v0.3.19, v1.6.2)
+   - Added proper creation of device entries from Gateway format data (v0.3.19, v1.6.2)
+   - Added specific handling for the format: `{"v":1,"mid":12,"time":1744564900,"ip":"192.168.1.82","mac":"E831CDCCCBB0","devices":[[0,"D712ED6A66C6",-85,"0201061AFF4C000215B5B182C7EAB14988AA99B5C1517008D90001C666C5"],[0,"D0E29D3E51BA",-91,"0201061AFF4C000215B5B182C7EAB14988AA99B5C1517008D90001BA51C5"]],"rssi":-43,"metadata":{...}}` (v0.3.19, v1.6.2)
 
 ### Implementation Details:
 1. In `__init__.py` (v0.3.0):
@@ -225,3 +233,13 @@ To manually install the dashboard:
    - Added tab-based navigation using Mushroom cards
    - Ensured compatibility with different entity availability states
    - Added conditional display based on entity availability
+
+5. Enhanced BLE Discovery Add-on (v0.3.19, v1.6.2):
+   - Fixed critical issue where add-on reported "Total discovered devices: 0" despite valid MQTT payload
+   - Enhanced `get_ble_gateway_data()` function to detect and handle AprilBrother Gateway format
+   - Improved `process_ble_gateway_data()` function to properly extract device information from nested arrays
+   - Added comprehensive handling of the specific Gateway format with devices field containing array of arrays
+   - Added proper creation of device entries from extracted Gateway data
+   - Implemented more robust logging to show exactly what format is being detected and processed
+   - Added signature pattern recognition to identify AprilBrother Gateway payloads with fields like v, mid, time, ip, mac, devices
+   - Enhanced MQTT sensor discovery to find sensors containing Gateway data in different forms

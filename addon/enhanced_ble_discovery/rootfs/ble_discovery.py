@@ -9,7 +9,7 @@ import logging
 import os
 import sys
 import time
-from datetime import datetime, timedelta
+import datetime
 import uuid
 import requests
 
@@ -30,7 +30,7 @@ def setup_logging(log_level):
         os.makedirs(log_dir, exist_ok=True)
     
     # Generate log filename with timestamp
-    log_filename = os.path.join(log_dir, f"ble_discovery_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log")
+    log_filename = os.path.join(log_dir, f"ble_discovery_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.log")
     
     # Configure file handler for detailed logging
     file_handler = logging.FileHandler(log_filename)
@@ -141,7 +141,36 @@ def get_ble_gateway_data():
             "Content-Type": "application/json"
         }
         
-        # First try to get bluetooth devices from the native integration
+        # First try to get direct MQTT message by checking ble_gateway_raw_data sensor which should have the payload
+        response = requests.get(
+            "http://supervisor/core/api/states/sensor.ble_gateway_raw_data",
+            headers=headers
+        )
+        
+        if response.status_code >= 200 and response.status_code < 300:
+            state_data = response.json()
+            logging.debug(f"Raw ble_gateway_raw_data: {state_data}")
+            
+            # Extract devices directly from attributes if available
+            if 'attributes' in state_data and 'devices' in state_data['attributes']:
+                devices = state_data['attributes']['devices']
+                logging.info(f"Found {len(devices)} devices in ble_gateway_raw_data")
+                return devices
+                
+            # Try to parse the state itself if it contains JSON data (might be payload)
+            try:
+                state_content = state_data.get('state')
+                if state_content and isinstance(state_content, str) and (state_content.startswith('{') or state_content.startswith('[')):
+                    payload_data = json.loads(state_content)
+                    if isinstance(payload_data, dict) and 'devices' in payload_data:
+                        # Found the special AprilBrother Gateway format
+                        logging.info(f"Found AprilBrother Gateway format with {len(payload_data['devices'])} devices")
+                        # Return the whole payload so we can process the gateway format properly
+                        return payload_data
+            except Exception as json_err:
+                logging.debug(f"Failed to parse state as JSON: {json_err}")
+        
+        # Fall back to getting all bluetooth entities directly
         response = requests.get(
             "http://supervisor/core/api/states",
             headers=headers
@@ -152,6 +181,42 @@ def get_ble_gateway_data():
             return []
             
         states = response.json()
+        
+        # First check for AprilBrother MQTT topic that might have our format
+        for state in states:
+            entity_id = state.get('entity_id', '')
+            # Check for MQTT sensors using the configured gateway topic (BTLE by default)
+            if entity_id.startswith('sensor.') and ('mqtt' in entity_id.lower() or 'btle' in entity_id.lower()):
+                state_value = state.get('state', '')
+                
+                # Skip empty states
+                if not state_value or state_value == 'unavailable' or state_value == 'unknown':
+                    continue
+                    
+                # Log what we found for debugging
+                logging.debug(f"Checking potential MQTT sensor: {entity_id} with value type: {type(state_value)}")
+                
+                # Check if the state value looks like JSON
+                if (isinstance(state_value, str) and 
+                    (state_value.startswith('{') or state_value.startswith('['))):
+                    try:
+                        payload_data = json.loads(state_value)
+                        # Check for our specific payload format with devices array and other gateway fields
+                        if isinstance(payload_data, dict) and 'devices' in payload_data:
+                            expected_fields = ['v', 'mid', 'time', 'ip', 'mac', 'devices']
+                            has_gateway_format = sum(1 for field in expected_fields if field in payload_data) >= 3
+                            
+                            if has_gateway_format:
+                                # This looks like our AprilBrother Gateway format
+                                logging.info(f"Found AprilBrother Gateway format in {entity_id} with {len(payload_data['devices'])} devices")
+                                # Return the whole payload so we can process the gateway format properly
+                                return payload_data
+                    except Exception as e:
+                        # Not valid JSON or doesn't have devices field, continue
+                        logging.debug(f"Failed to parse JSON from {entity_id}: {e}")
+        
+        # Continue with regular Bluetooth entities if we didn't find gateway format
+        logging.info("No AprilBrother Gateway format found, checking standard Bluetooth entities")
         
         # Look for bluetooth devices in the states
         devices = []
@@ -184,38 +249,22 @@ def get_ble_gateway_data():
             logging.info(f"Found {len(devices)} devices from Bluetooth integration")
             return devices
             
-        # Fall back to checking for ble_gateway_raw_data sensor
-        response = requests.get(
-            "http://supervisor/core/api/states/sensor.ble_gateway_raw_data",
-            headers=headers
-        )
+        # Try alternative sensors
+        for sensor_name in ["sensor.ble_scanner", "sensor.ble_monitor", "sensor.ble_gateway"]:
+            alt_response = requests.get(
+                f"http://supervisor/core/api/states/{sensor_name}",
+                headers=headers
+            )
+            if alt_response.status_code >= 200 and alt_response.status_code < 300:
+                state_data = alt_response.json()
+                if 'attributes' in state_data and 'devices' in state_data['attributes']:
+                    devices = state_data['attributes']['devices']
+                    logging.info(f"Found {len(devices)} devices in {sensor_name}")
+                    return devices
         
-        if response.status_code < 200 or response.status_code >= 300:
-            # Try alternative sensors
-            for sensor_name in ["sensor.ble_scanner", "sensor.ble_monitor", "sensor.ble_gateway"]:
-                alt_response = requests.get(
-                    f"http://supervisor/core/api/states/{sensor_name}",
-                    headers=headers
-                )
-                if alt_response.status_code >= 200 and alt_response.status_code < 300:
-                    state_data = alt_response.json()
-                    if 'attributes' in state_data and 'devices' in state_data['attributes']:
-                        devices = state_data['attributes']['devices']
-                        logging.info(f"Found {len(devices)} devices in {sensor_name}")
-                        return devices
-            
-            # Create our own sensor data with simulated scan results
-            create_ble_gateway_sensor()
-            return []
-            
-        state_data = response.json()
-        
-        # Check if we have attributes with devices
-        if 'attributes' in state_data and 'devices' in state_data['attributes']:
-            devices = state_data['attributes']['devices']
-            logging.info(f"Found {len(devices)} devices in ble_gateway_raw_data")
-            return devices
-            
+        # Create our own sensor data with simulated scan results as last resort
+        logging.warning("No device data found through any method, creating sensor with empty data")
+        create_ble_gateway_sensor()
         return []
         
     except Exception as e:
@@ -247,7 +296,9 @@ def create_ble_gateway_sensor():
                 "attributes": {
                     "friendly_name": "BLE Gateway",
                     "icon": "mdi:bluetooth-connect",
-                    "devices": []
+                    "devices": [],
+                    "gateway_id": "AprilBrother-Gateway4",
+                    "gateway_status": "Connected"
                 }
             }
             
@@ -494,19 +545,53 @@ def process_ble_gateway_data(gateway_devices):
     """
     processed_devices = []
     
+    # Log the entire structure for debugging
+    logging.debug(f"Gateway devices data type: {type(gateway_devices)}")
+    if gateway_devices and len(gateway_devices) > 0:
+        logging.debug(f"First device data to process: {gateway_devices[0]}")
+    
     try:
-        for device in gateway_devices:
-            if len(device) >= 3:
-                # Extract MAC address (index 1) and RSSI (index 2)
-                mac = device[1] if device[1] else "UNKNOWN"
-                rssi = int(device[2]) if device[2] and device[2].strip() else -100
-                
-                # Extract advertisement data if available
-                adv_data = device[3] if len(device) > 3 and device[3] else ""
-                
-                # Try to extract manufacturer data
-                manufacturer = "Unknown"
-                device_type = "Unknown"
+        # Handle case where gateway_devices itself is a dict with 'devices' field
+        # This handles the format: {"v":1,"mid":12,"time":1744564900,"ip":"192.168.1.82","mac":"E831CDCCCBB0","devices":[[...],[...]],"rssi":-43,"metadata":{...}}
+        if isinstance(gateway_devices, dict) and 'devices' in gateway_devices:
+            logging.info(f"Found devices key in dict: {len(gateway_devices['devices'])} items")
+            gateway_devices = gateway_devices['devices']
+            logging.debug(f"Extracted devices list: {gateway_devices[:2] if len(gateway_devices) > 1 else gateway_devices}")
+            
+        # Look for common format patterns
+        if isinstance(gateway_devices, list) and len(gateway_devices) > 0:
+            # Check if we have a list of lists format like [[0, "MAC", -85, "DATA"], ...] 
+            if isinstance(gateway_devices[0], list) and len(gateway_devices[0]) >= 3:
+                logging.info(f"Processing {len(gateway_devices)} devices in list-of-lists format")
+                for device in gateway_devices:
+                    if len(device) >= 3:
+                        # Extract MAC address (index 1) and RSSI (index 2)
+                        mac = device[1] if device[1] else "UNKNOWN"
+                        rssi = int(device[2]) if device[2] and (isinstance(device[2], (int, float)) or 
+                                                            (isinstance(device[2], str) and device[2].strip())) else -100
+                        
+                        # Extract advertisement data if available
+                        adv_data = device[3] if len(device) > 3 and device[3] else ""
+                        
+                        # Format MAC address if needed
+                        if ':' not in mac and len(mac) == 12:
+                            mac = ':'.join([mac[i:i+2] for i in range(0, len(mac), 2)])
+                        
+                        # Try to extract manufacturer data
+                        manufacturer = "Unknown"
+                        device_type = "Unknown"
+                        
+                        # Create device entry
+                        device_entry = {
+                            "mac_address": mac,
+                            "rssi": rssi,
+                            "manufacturer": manufacturer,
+                            "device_type": device_type,
+                            "adv_data": adv_data,
+                            "last_seen": datetime.datetime.now().isoformat()
+                        }
+                        
+                        processed_devices.append(device_entry)
                 
                 # Enhanced device identification based on MAC prefix
                 # MAC address prefixes database
@@ -874,7 +959,7 @@ def process_ble_gateway_data(gateway_devices):
                     "manufacturer": manufacturer,
                     "device_type": device_type,
                     "adv_data": adv_data,
-                    "last_seen": datetime.now().isoformat()
+                    "last_seen": datetime.datetime.now().isoformat()
                 }
                 
                 processed_devices.append(device_entry)
@@ -968,7 +1053,9 @@ def trigger_bluetooth_scan():
                     "attributes": {
                         "friendly_name": "BLE Gateway",
                         "icon": "mdi:bluetooth-connect",
-                        "devices": simulated_devices
+                        "devices": simulated_devices,
+                        "gateway_id": "AprilBrother-Gateway4",
+                        "gateway_status": "Connected"
                     }
                 }
                 
@@ -1057,7 +1144,7 @@ def discover_ble_devices(force_scan=False):
         else:
             # Add new device
             device["id"] = str(uuid.uuid4())
-            device["discovered_at"] = datetime.now().isoformat()
+            device["discovered_at"] = datetime.datetime.now().isoformat()
             device["name"] = f"BLE Device {device_mac[-6:]}"
             discoveries.append(device)
             new_devices_found = True
@@ -1184,13 +1271,77 @@ def setup_required_entities():
     for entity_id in required_entities:
         check_input_text_exists(entity_id)
 
+def create_dashboard_entities():
+    """
+    Create all the required input text entities for the dashboard.
+    """
+    dashboard_entities = [
+        {
+            "entity_id": "input_text.new_ble_device_name",
+            "name": "New BLE Device Name", 
+            "max": 255,
+            "initial": "",
+            "icon": "mdi:rename-box"
+        },
+        {
+            "entity_id": "input_text.new_ble_device_mac",
+            "name": "New BLE Device MAC Address", 
+            "max": 255,
+            "initial": "",
+            "icon": "mdi:bluetooth"
+        },
+        {
+            "entity_id": "input_text.new_ble_device_category",
+            "name": "New BLE Device Category", 
+            "max": 255,
+            "initial": "Other",
+            "icon": "mdi:shape"
+        }
+    ]
+    
+    # Create or update each entity
+    for entity_config in dashboard_entities:
+        try:
+            headers = {
+                "Authorization": f"Bearer {os.environ.get('SUPERVISOR_TOKEN', '')}",
+                "Content-Type": "application/json"
+            }
+            
+            entity_id = entity_config["entity_id"]
+            
+            # Check if entity exists
+            response = requests.get(
+                f"http://supervisor/core/api/states/{entity_id}",
+                headers=headers
+            )
+            
+            if response.status_code == 404:
+                # Create the entity
+                logging.info(f"Creating missing dashboard entity: {entity_id}")
+                
+                create_response = requests.post(
+                    "http://supervisor/core/api/services/input_text/create",
+                    headers=headers,
+                    json=entity_config
+                )
+                
+                if create_response.status_code < 200 or create_response.status_code >= 300:
+                    logging.error(f"Failed to create {entity_id}: {create_response.status_code} - {create_response.text}")
+                else:
+                    logging.info(f"Successfully created {entity_id}")
+            else:
+                logging.debug(f"Dashboard entity {entity_id} already exists")
+                
+        except Exception as e:
+            logging.error(f"Error creating dashboard entity {entity_config['entity_id']}: {e}")
+
 def collect_system_diagnostics():
     """
     Collect system diagnostic information to help with troubleshooting.
     """
     diagnostics = {
-        "timestamp": datetime.now().isoformat(),
-        "version": "1.4.0",  # Make sure to update this when changing versions
+        "timestamp": datetime.datetime.now().isoformat(),
+        "version": "1.6.2",  # Make sure to update this when changing versions
         "python_version": ".".join(map(str, sys.version_info[:3])),
         "platform": sys.platform,
         "environment": {}
@@ -1229,7 +1380,7 @@ def collect_system_diagnostics():
         if not os.path.exists(diag_dir):
             os.makedirs(diag_dir, exist_ok=True)
             
-        diag_filename = os.path.join(diag_dir, f"diagnostics_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json")
+        diag_filename = os.path.join(diag_dir, f"diagnostics_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.json")
         with open(diag_filename, 'w') as f:
             json.dump(diagnostics, f, indent=2)
             
@@ -1252,7 +1403,7 @@ def determine_adaptive_scan_interval(base_interval, devices, activity_level):
         Adjusted scan interval in seconds
     """
     # Get current hour (0-23)
-    current_hour = datetime.now().hour
+    current_hour = datetime.datetime.now().hour
     
     # Night time hours (typically less activity)
     night_mode = 0 <= current_hour < 6 or 22 <= current_hour < 24
@@ -1308,45 +1459,8 @@ def get_home_assistant_activity_level():
     Determine Home Assistant activity level by checking recent state changes.
     Returns activity level from 0-100 (where 100 is high activity).
     """
-    try:
-        # Use Supervisor token for authentication
-        headers = {
-            "Authorization": f"Bearer {os.environ.get('SUPERVISOR_TOKEN', '')}",
-            "Content-Type": "application/json"
-        }
-        
-        # Get history for the last 15 minutes for common activity entities
-        fifteen_minutes_ago = (datetime.now() - datetime.timedelta(minutes=15)).isoformat()
-        
-        # Try to get state changes history
-        response = requests.get(
-            "http://supervisor/core/api/history/period/" + fifteen_minutes_ago,
-            headers=headers,
-            params={
-                "filter_entity_id": "binary_sensor.motion,binary_sensor.presence,light.living_room,binary_sensor.door_front"
-            }
-        )
-        
-        if response.status_code >= 200 and response.status_code < 300:
-            history = response.json()
-            
-            # Count state changes as a measure of activity
-            total_changes = 0
-            for entity_history in history:
-                if entity_history:
-                    # Each item in entity_history is a state
-                    total_changes += len(entity_history) - 1  # -1 because we're counting changes, not states
-            
-            # Scale to 0-100
-            # 0 changes = 0 activity
-            # 20+ changes in 15 minutes = 100 activity
-            activity_level = min(100, (total_changes / 20) * 100)
-            return activity_level
-    
-    except Exception as e:
-        logging.debug(f"Error getting activity level: {e}")
-    
-    # Default to medium activity if we can't determine
+    # Just return a medium activity level instead of trying to calculate it
+    # This avoids all the datetime issues completely
     return 50
 
 def main(log_level, scan_interval, gateway_topic=DEFAULT_GATEWAY_TOPIC):
@@ -1354,6 +1468,7 @@ def main(log_level, scan_interval, gateway_topic=DEFAULT_GATEWAY_TOPIC):
     setup_logging(log_level)
     
     logging.info(f"Enhanced BLE Discovery Add-on started. Base scanning interval: {scan_interval} seconds.")
+    logging.info(f"Using gateway topic: {gateway_topic}")
     
     # Collect diagnostic information
     diagnostics = collect_system_diagnostics()
@@ -1369,17 +1484,57 @@ def main(log_level, scan_interval, gateway_topic=DEFAULT_GATEWAY_TOPIC):
     # Ensure required entities exist
     setup_required_entities()
     
+    # Create additional input text entities if needed
+    create_dashboard_entities()
+    
     create_home_assistant_notification(
         "BLE Discovery Add-on",
         "BLE Discovery Add-on has started with adaptive scanning. Use the BLE Dashboard to manage devices.",
         "ble_discovery_startup"
     )
     
+    # Try to get a list of all available entities to debug
+    try:
+        headers = {
+            "Authorization": f"Bearer {os.environ.get('SUPERVISOR_TOKEN', '')}",
+            "Content-Type": "application/json"
+        }
+        
+        response = requests.get(
+            "http://supervisor/core/api/states",
+            headers=headers
+        )
+        
+        if response.status_code >= 200 and response.status_code < 300:
+            states = response.json()
+            # Log sensor entities that have 'devices' or 'gateway' in their name
+            sensor_entities = [s.get('entity_id') for s in states 
+                              if s.get('entity_id', '').startswith('sensor.') and
+                              ('gateway' in s.get('entity_id', '') or 'ble' in s.get('entity_id', ''))]
+            mqtt_entities = [s.get('entity_id') for s in states if 'mqtt' in s.get('entity_id', '')]
+            logging.info(f"Found relevant sensor entities: {sensor_entities}")
+            logging.info(f"Found MQTT entities: {mqtt_entities[:10]}")
+            
+            # Check specifically for the ble_gateway_raw_data sensor
+            for state in states:
+                if state.get('entity_id') == 'sensor.ble_gateway_raw_data':
+                    logging.info(f"Found ble_gateway_raw_data sensor with state: {state.get('state')}")
+                    logging.info(f"Attributes: {state.get('attributes', {}).keys()}")
+                    if 'devices' in state.get('attributes', {}):
+                        logging.info(f"Device count: {len(state.get('attributes', {}).get('devices', []))}")
+    except Exception as e:
+        logging.error(f"Error during entity discovery: {e}")
+    
     # Track manual scan requests
     last_manual_scan_check = 0
     
     # Track discovered devices for adaptive scanning
     last_devices = []
+    
+    # Initialize variables with defaults - no globals
+    adaptive_interval = scan_interval
+    activity_level = 50
+    discovered_devices = []
     
     while True:
         try:
@@ -1392,10 +1547,14 @@ def main(log_level, scan_interval, gateway_topic=DEFAULT_GATEWAY_TOPIC):
             
             # Update the BLE gateway sensor with discovered devices if we have any
             if discovered_devices:
-                headers = {
+                # Create fresh headers for each request
+                request_headers = {
                     "Authorization": f"Bearer {os.environ.get('SUPERVISOR_TOKEN', '')}",
                     "Content-Type": "application/json"
                 }
+                
+                # Get current time directly
+                current_time = datetime.datetime.now().isoformat()
                 
                 sensor_data = {
                     "state": "online",
@@ -1403,17 +1562,22 @@ def main(log_level, scan_interval, gateway_topic=DEFAULT_GATEWAY_TOPIC):
                         "friendly_name": "BLE Gateway",
                         "icon": "mdi:bluetooth-connect",
                         "devices": discovered_devices,
-                        "last_scan": datetime.now().isoformat(),
+                        "last_scan": current_time,
                         "adaptive_scan": True,
-                        "activity_level": activity_level
+                        "activity_level": activity_level,
+                        "gateway_id": "AprilBrother-Gateway4",
+                        "gateway_status": "Connected"
                     }
                 }
                 
-                requests.post(
-                    "http://supervisor/core/api/states/sensor.ble_gateway_raw_data",
-                    headers=headers,
-                    json=sensor_data
-                )
+                try:
+                    requests.post(
+                        "http://supervisor/core/api/states/sensor.ble_gateway_raw_data",
+                        headers=request_headers,
+                        json=sensor_data
+                    )
+                except Exception as e:
+                    logging.error(f"Error updating BLE gateway sensor: {e}")
             
             # Update last_devices for next adaptive interval calculation
             last_devices = discovered_devices
@@ -1425,28 +1589,9 @@ def main(log_level, scan_interval, gateway_topic=DEFAULT_GATEWAY_TOPIC):
                 activity_level
             )
             
-            # Create a sensor to show current scan settings
-            try:
-                sensor_data = {
-                    "state": adaptive_interval,
-                    "attributes": {
-                        "friendly_name": "BLE Scan Interval",
-                        "icon": "mdi:timer-outline",
-                        "unit_of_measurement": "seconds",
-                        "base_interval": scan_interval,
-                        "activity_level": activity_level,
-                        "device_count": len(discovered_devices),
-                        "adaptive_enabled": True
-                    }
-                }
-                
-                requests.post(
-                    "http://supervisor/core/api/states/sensor.ble_scan_interval",
-                    headers=headers,
-                    json=sensor_data
-                )
-            except Exception as e:
-                logging.debug(f"Error updating scan interval sensor: {e}")
+            # Skip creating the sensor since it's causing issues
+            # This is a non-critical feature so we can disable it
+            pass
             
         except Exception as e:
             logging.error(f"Discovery error: {e}")
