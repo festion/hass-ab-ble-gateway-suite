@@ -216,6 +216,7 @@ To manually install the dashboard:
    - Added fallback mechanisms for missing button.bluetooth_scan entity (v0.3.31, v1.7.3)
    - Fixed template syntax error in combined dashboard by placing JavaScript code on a single line (v0.3.32, v1.7.4)
    - Standardized default MQTT topic to "xbg" for all add-on configurations (v0.3.33, v1.7.5)
+   - Fixed template syntax errors in all dashboard files by placing JavaScript code on single lines (v0.3.34, v1.7.6)
 
 ### Implementation Details:
 1. In `__init__.py` (v0.3.0):
