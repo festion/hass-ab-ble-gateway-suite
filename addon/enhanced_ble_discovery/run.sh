@@ -29,10 +29,20 @@ if [ ! -f "/.dependencies_installed" ]; then
 fi
 
 # Create dashboard if it doesn't exist
-if [ ! -f "/config/dashboards/btle_dashboard.yaml" ]; then
-    bashio::log.info "Creating BLE dashboard..."
+if [ ! -f "/config/dashboards/btle_dashboard.yaml" ] || [ ! -f "/config/dashboards/btle_combined_dashboard.yaml" ]; then
+    bashio::log.info "Creating BLE dashboards..."
     mkdir -p /config/dashboards
-    cp /btle_dashboard.yaml /config/dashboards/
+    
+    # Copy the basic dashboard if it doesn't exist
+    if [ ! -f "/config/dashboards/btle_dashboard.yaml" ]; then
+        cp /btle_dashboard.yaml /config/dashboards/
+    fi
+    
+    # Copy the enhanced combined dashboard if it doesn't exist
+    if [ ! -f "/config/dashboards/btle_combined_dashboard.yaml" ] && [ -f "/btle_combined_dashboard.yaml" ]; then
+        cp /btle_combined_dashboard.yaml /config/dashboards/
+        bashio::log.info "Installed enhanced combined BLE dashboard - access it at /lovelace/ble-utility"
+    fi
 fi
 
 # Create input helpers if they don't exist

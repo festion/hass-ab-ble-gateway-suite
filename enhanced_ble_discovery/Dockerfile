@@ -24,6 +24,7 @@ COPY rootfs /
 # Copy additional files
 COPY ble_scripts.yaml /ble_scripts.yaml
 COPY btle_dashboard.yaml /btle_dashboard.yaml
+COPY btle_combined_dashboard.yaml /btle_combined_dashboard.yaml
 COPY ble_input_text.yaml /ble_input_text.yaml
 
 # Fix any potential line ending issues
