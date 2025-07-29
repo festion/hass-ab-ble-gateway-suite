@@ -1,52 +1,48 @@
 """Config flow for  devices."""
+
 import errno
 from functools import partial
 import logging
 import socket
-
-from homeassistant.components import mqtt
-from homeassistant.components.mqtt.const import CONF_BROKER
-from homeassistant.exceptions import HomeAssistantError
-from .const import DOMAIN
-from homeassistant.components.mqtt.models import (  
-    DATA_MQTT,
-    DATA_MQTT_AVAILABLE
-)
-
 from urllib.parse import urlparse
 
-import voluptuous as vol
-import requests
-
 from homeassistant import config_entries, data_entry_flow
-from homeassistant.components import zeroconf
+from homeassistant.components import mqtt, zeroconf
+from homeassistant.components.mqtt.const import CONF_BROKER
+from homeassistant.components.mqtt.models import DATA_MQTT, DATA_MQTT_AVAILABLE
+from homeassistant.exceptions import HomeAssistantError
+import requests
+import voluptuous as vol
+
+from .const import DOMAIN
+
 try:
     # Use the new recommended location for ZeroconfServiceInfo
     from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
 except ImportError:
     # Fallback for backward compatibility
     from homeassistant.components.zeroconf import ZeroconfServiceInfo
-from homeassistant.data_entry_flow import FlowResult
-from homeassistant.const import (
-    CONF_HOST,
-    CONF_MAC,
-    CONF_NAME,
-    CONF_TIMEOUT,
-    CONF_TYPE,
-    CONF_DESCRIPTION,
-    ATTR_CONFIGURATION_URL,
-    CONF_PORT,
-    CONF_FRIENDLY_NAME,
-    CONF_HOSTS,
-    CONF_UNIQUE_ID,
-    CONF_USERNAME,
-    CONF_PASSWORD,
-)
-from homeassistant.components import mqtt
 
-from homeassistant.helpers import config_validation as cv
 from datetime import timedelta
 
+from homeassistant.components import mqtt
+from homeassistant.const import (
+    ATTR_CONFIGURATION_URL,
+    CONF_DESCRIPTION,
+    CONF_FRIENDLY_NAME,
+    CONF_HOST,
+    CONF_HOSTS,
+    CONF_MAC,
+    CONF_NAME,
+    CONF_PASSWORD,
+    CONF_PORT,
+    CONF_TIMEOUT,
+    CONF_TYPE,
+    CONF_UNIQUE_ID,
+    CONF_USERNAME,
+)
+from homeassistant.data_entry_flow import FlowResult
+from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.debounce import Debouncer
 
 # from .helpers import format_mac
@@ -65,7 +61,10 @@ class AbBleFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         if not discovery_info.properties["hw"].startswith("4."):
             _LOGGER.error("Only AB BLE Gateway revisions 4.x are supported ")
             return self.async_abort(reason="zeroconf_server_error")
-        formatted_mac = ':'.join(discovery_info.properties["mac"][i:i + 2] for i in range(0, len(discovery_info.properties["mac"]), 2))
+        formatted_mac = ":".join(
+            discovery_info.properties["mac"][i : i + 2]
+            for i in range(0, len(discovery_info.properties["mac"]), 2)
+        )
         self.config = {
             CONF_HOST: discovery_info.host,
             CONF_HOSTS: discovery_info.addresses,
@@ -116,12 +115,16 @@ class AbBleFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         """
 
         errors = {}
-        if (user_input):
+        if user_input:
             # check connection and bail
             self.config["mqtt_id_prefix"] = user_input["mqtt_id_prefix"]
             self.config["mqtt_topic"] = user_input["mqtt_topic"]
-            self.config["mqtt_user"] = user_input["mqtt_user"] if "mqtt_user" in user_input else None
-            self.config["mqtt_password"] = user_input["mqtt_password"] if "mqtt_password" in user_input else None
+            self.config["mqtt_user"] = (
+                user_input["mqtt_user"] if "mqtt_user" in user_input else None
+            )
+            self.config["mqtt_password"] = (
+                user_input["mqtt_password"] if "mqtt_password" in user_input else None
+            )
             return await self._async_get_entry()
         host = (
             user_input[CONF_HOST]
@@ -153,14 +156,14 @@ class AbBleFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                 self.config[CONF_HOSTS] = [host]
                 self.config[CONF_PORT] = port
             if CONF_NAME not in self.config:
-                name = "xbg-" + details['mac'].replace(':', "")[-6].lower()
+                name = "xbg-" + details["mac"].replace(":", "")[-6].lower()
                 self.config[CONF_NAME] = name
                 self.config[CONF_FRIENDLY_NAME] = name
 
             if CONF_MAC not in self.config:
-                self.config[CONF_MAC] = details['mac']
+                self.config[CONF_MAC] = details["mac"]
             if CONF_UNIQUE_ID not in self.config:
-                self.config[CONF_UNIQUE_ID] = details['mac']
+                self.config[CONF_UNIQUE_ID] = details["mac"]
 
             # Check if auth is required
             # http://192.168.178.223/info
@@ -179,25 +182,43 @@ class AbBleFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         # {"conn-type":3,"host":"mqtt.bconimg.com","port":1883,"mqtt-topic":"gw/test555","cfg-topic":"device-config","one-cfg-topic":"device-config-","one-pub-topic":"pub-config-","http-url":"","req-int":1,"min-rssi":-127,"adv-filter":0,"dup-filter":0,"scan-act":0,"mqtt-id-prefix":"XBG_","mqtt-username":"","mqtt-password":"","mqtt-config":0,"mqtt-retain":0,"mqtt-qos":0,"basic-auth":1,"req-format":0,"ntp-enabled":0,"ntp1":"ntp1.aliyun.com","ntp2":"ntp2.aliyun.com","mqtts":0,"https":0,"wss":0,"sch-type":0,"metadata":"","tz":"","sch-begin":"","sch-end":"","filter-mfg":0,"filter-uuid":""}
         # make sure conn-type is 3, mqtt settings match and show an error otherwise
         mqtt_data = self.hass.data[DATA_MQTT]
-        if mqtt_data.client is None or not mqtt.util.mqtt_config_entry_enabled(self.hass):
+        if mqtt_data.client is None or not mqtt.util.mqtt_config_entry_enabled(
+            self.hass
+        ):
             errors["base"] = "mqtt_not_enabled"
         mqtt_config = mqtt_data.client.conf
-        if (gateway_config['conn-type'] != 3):  # 3 is the conn-type for MQTT (1 is websocket, 2 is HTTP)
+        if (
+            gateway_config["conn-type"] != 3
+        ):  # 3 is the conn-type for MQTT (1 is websocket, 2 is HTTP)
             errors["base"] = "gateway_mqtt_not_configured"
 
-        elif (gateway_config['host'] != mqtt_config.get(CONF_BROKER) or
-                gateway_config['port'] != mqtt_config.get(CONF_PORT)):
+        elif gateway_config["host"] != mqtt_config.get(CONF_BROKER) or gateway_config[
+            "port"
+        ] != mqtt_config.get(CONF_PORT):
             errors["base"] = "mqtt_broker_mismatch"
 
-        elif (gateway_config['mqtt-username'] != (mqtt_config.get(CONF_USERNAME) or "") or
-                gateway_config['mqtt-password'] != (mqtt_config.get(CONF_PASSWORD) or "")):
+        elif gateway_config["mqtt-username"] != (
+            mqtt_config.get(CONF_USERNAME) or ""
+        ) or gateway_config["mqtt-password"] != (mqtt_config.get(CONF_PASSWORD) or ""):
             errors["base"] = "mqtt_auth_mismatch"
 
         data_schema = {
-            vol.Required("mqtt_id_prefix", description={"suggested_value": gateway_config['mqtt-id-prefix']}): str,
-            vol.Required("mqtt_topic", description={"suggested_value": gateway_config['mqtt-topic']}): str,
-            vol.Optional("mqtt_user", description={"suggested_value": gateway_config['mqtt-username']}): str,
-            vol.Optional("mqtt_password", description={"suggested_value": gateway_config['mqtt-password']}): str,
+            vol.Required(
+                "mqtt_id_prefix",
+                description={"suggested_value": gateway_config["mqtt-id-prefix"]},
+            ): str,
+            vol.Required(
+                "mqtt_topic",
+                description={"suggested_value": gateway_config["mqtt-topic"]},
+            ): str,
+            vol.Optional(
+                "mqtt_user",
+                description={"suggested_value": gateway_config["mqtt-username"]},
+            ): str,
+            vol.Optional(
+                "mqtt_password",
+                description={"suggested_value": gateway_config["mqtt-password"]},
+            ): str,
         }
 
         return self.async_show_form(
@@ -207,7 +228,8 @@ class AbBleFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                 CONF_NAME: self.config[CONF_NAME],
                 CONF_DESCRIPTION: self.config[CONF_UNIQUE_ID],
             },
-            data_schema=vol.Schema(data_schema), errors=errors
+            data_schema=vol.Schema(data_schema),
+            errors=errors,
         )
 
     async def async_step_user(self, user_input=None):
@@ -230,12 +252,16 @@ class AbBleFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
             username = (
                 user_input[CONF_USERNAME]
                 if CONF_USERNAME in user_input
-                else (self.config[CONF_USERNAME] if CONF_USERNAME in self.config else None)
+                else (
+                    self.config[CONF_USERNAME] if CONF_USERNAME in self.config else None
+                )
             )
             password = (
                 user_input[CONF_PASSWORD]
                 if CONF_PASSWORD in user_input
-                else (self.config[CONF_PASSWORD] if CONF_PASSWORD in self.config else None)
+                else (
+                    self.config[CONF_PASSWORD] if CONF_PASSWORD in self.config else None
+                )
             )
             if CONF_HOST not in self.config:
                 self.config[CONF_HOST] = host
@@ -251,7 +277,6 @@ class AbBleFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         data_schema = {
             vol.Required(CONF_HOST): str,
             vol.Required(CONF_PORT, default="80"): str,
-
             vol.Optional(CONF_USERNAME): str,
             vol.Optional(CONF_PASSWORD): str,
         }

@@ -1,20 +1,21 @@
 import logging
 from uuid import UUID
+
 _LOGGER = logging.getLogger(__name__)
 
 
 def to_unformatted_mac(addr: int):
     """Return unformatted MAC address"""
-    return ''.join(f'{i:02X}' for i in addr[:])
+    return "".join(f"{i:02X}" for i in addr[:])
 
 
 def to_mac(addr: str) -> str:
     """Return formatted MAC address"""
-    return ':'.join(f'{i:02X}' for i in addr)
+    return ":".join(f"{i:02X}" for i in addr)
 
 
 def parse_ap_ble_devices_data(devices_data):
-    """ Converts the April Brother BLE Gateway Data Format into Raw HCI Packets """
+    """Converts the April Brother BLE Gateway Data Format into Raw HCI Packets"""
     # See  https://wiki.aprbrother.com/en/User_Guide_For_AB_BLE_Gateway_V4.html#data-format
     d = devices_data
     data = bytearray(bytearray(6))  # prepend 6 bytes
@@ -27,7 +28,7 @@ def parse_ap_ble_devices_data(devices_data):
 
 
 def parse_raw_data(data: bytearray):
-    """ Converts RAW HCI Packets info BLE advertisments as Bleak would generate them"""
+    """Converts RAW HCI Packets info BLE advertisments as Bleak would generate them"""
     # This is partly from https://github.com/Ernst79/bleparser/blob/ecd3c596760aab3ec4bf7ba30515831024fc47d3/package/bleparser/__init__.py#L82
 
     # check if packet is Extended scan result
@@ -42,9 +43,10 @@ def parse_raw_data(data: bytearray):
     # check for BTLE msg size
     msg_length = data[2] + 3
     if (
-        msg_length <= adpayload_start or msg_length != len(data) or msg_length != (
-            adpayload_start + adpayload_size + (0 if is_ext_packet else 1)
-        )
+        msg_length <= adpayload_start
+        or msg_length != len(data)
+        or msg_length
+        != (adpayload_start + adpayload_size + (0 if is_ext_packet else 1))
     ):
         return None
     # extract RSSI byte
@@ -54,7 +56,7 @@ def parse_raw_data(data: bytearray):
     if rssi > 127:
         rssi = rssi - 256
     # MAC address
-    mac = (data[8 if is_ext_packet else 7:14 if is_ext_packet else 13])[::-1]
+    mac = (data[8 if is_ext_packet else 7 : 14 if is_ext_packet else 13])[::-1]
     complete_local_name = ""
     shortened_local_name = ""
     service_class_uuid16 = None
@@ -65,7 +67,7 @@ def parse_raw_data(data: bytearray):
     while adpayload_size > 1:
         adstuct_size = data[adpayload_start] + 1
         if adstuct_size > 1 and adstuct_size <= adpayload_size:
-            adstruct = data[adpayload_start:adpayload_start + adstuct_size]
+            adstruct = data[adpayload_start : adpayload_start + adstuct_size]
             # https://www.bluetooth.com/specifications/assigned-numbers/generic-access-profile/
             adstuct_type = adstruct[1]
             if adstuct_type == 0x02:
@@ -99,30 +101,32 @@ def parse_raw_data(data: bytearray):
         local_name = shortened_local_name
 
     service_uuids = []
-    if (service_class_uuid128 is not None):
+    if service_class_uuid128 is not None:
         service_uuids.append(UUID(bytes=bytes(service_class_uuid128)).hex)
 
-    if (service_class_uuid16 is not None):
-        service_uuids.append("0000{:04x}-0000-1000-8000-00805f9b34fb".format(service_class_uuid16))
+    if service_class_uuid16 is not None:
+        service_uuids.append(
+            "0000{:04x}-0000-1000-8000-00805f9b34fb".format(service_class_uuid16)
+        )
 
     # https://github.com/hbldh/bleak/blob/c5cbb8485741331d03a3ac151e98f45edb560938/bleak/backends/corebluetooth/scanner.py#L82
     # https://github.com/hbldh/bleak/blob/60aa4aa23a97bda075770fec43202295602f1a9d/bleak/backends/winrt/scanner.py#L159
     service_data = {}
     if len(service_data_list) > 0:
         for service_data_elem in service_data_list:
-            service_data_uuid = "0000{:04x}-0000-1000-8000-00805f9b34fb".format((service_data_elem[3] << 8) | service_data_elem[2])
+            service_data_uuid = "0000{:04x}-0000-1000-8000-00805f9b34fb".format(
+                (service_data_elem[3] << 8) | service_data_elem[2]
+            )
             service_data[service_data_uuid] = service_data_elem[4:]
             service_uuids.append(service_data_uuid)
 
     manufacturer_data = {}
 
-    if (len(man_spec_data_list) > 1):
+    if len(man_spec_data_list) > 1:
         raise "Multiple Manufacturer Data Fields is not supported"
 
     if len(man_spec_data_list) > 0:
-        manufacturer_id = int.from_bytes(
-            man_spec_data_list[0][2:4], byteorder="little"
-        )
+        manufacturer_id = int.from_bytes(man_spec_data_list[0][2:4], byteorder="little")
         manufacturer_value = bytes(man_spec_data_list[0][4:])
         manufacturer_data[manufacturer_id] = manufacturer_value
 
@@ -132,5 +136,5 @@ def parse_raw_data(data: bytearray):
         "service_uuids": service_uuids,
         "local_name": local_name,
         "service_data": service_data,
-        'manufacturer_data': manufacturer_data
+        "manufacturer_data": manufacturer_data,
     }
