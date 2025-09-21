@@ -1424,6 +1424,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         can_connect=False,
     )
     scanner = AbBleScanner(
+        source_id,
         connector=connector,
     )
 
