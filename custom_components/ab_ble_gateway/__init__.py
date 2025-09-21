@@ -1512,7 +1512,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         return False
 
     # Register the scanner
-    unregister = async_register_scanner(hass, scanner, True)
+    unregister = async_register_scanner(hass, scanner, 1)
 
     # Store references for future cleanup
     hass.data[DOMAIN][entry.entry_id] = {
