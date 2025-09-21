@@ -39,6 +39,7 @@ from homeassistant.helpers.dispatcher import (
 )
 from homeassistant.helpers.service import async_register_admin_service
 from homeassistant.helpers.typing import ConfigType
+from homeassistant.helpers import issue_registry as ir
 from homeassistant.setup import async_when_setup
 import msgpack
 import voluptuous as vol
@@ -1417,6 +1418,36 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     source_id = str(entry.unique_id)
     connectable = False
+
+    # Check if restart is needed after update
+    stored_version = hass.data.get(DOMAIN, {}).get("version")
+
+    # Get current version from manifest
+    import json
+    import os
+    manifest_path = os.path.join(os.path.dirname(__file__), "manifest.json")
+    with open(manifest_path) as f:
+        manifest = json.load(f)
+    current_version = manifest["version"]
+
+    if stored_version and stored_version != current_version:
+        ir.async_create_issue(
+            hass,
+            DOMAIN,
+            "restart_required_after_update",
+            is_fixable=False,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key="restart_required_after_update",
+            translation_placeholders={
+                "old_version": stored_version,
+                "new_version": current_version,
+            },
+        )
+
+    # Store current version
+    if DOMAIN not in hass.data:
+        hass.data[DOMAIN] = {}
+    hass.data[DOMAIN]["version"] = current_version
 
     connector = HaBluetoothConnector(
         client=None,
